@@ -1,0 +1,179 @@
+const std = @import("std"); // works with version 0.15.1
+const bignum = @import("bignum");
+var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+const allocator = gpa.allocator();
+const arena_allocator = std.heap.ArenaAllocator.init(allocator);
+
+const bases = [_][]const u8 {
+    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+    "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+    "seventeen", "eighteen", "nineteen", "twenty", "twenty-one", "twenty-two", "twenty-three",
+    "twenty-four", "twenty-five", "twenty-six", "twenty-seven", "twenty-eight", "twenty-nine",
+    "thirty", "thirty-one", "thirty-two", "thirty-three", "thirty-four", "thirty-five",
+    "thirty-six", "thirty-seven", "thirty-eight", "thirty-nine", "forty", "forty-one",
+    "forty-two", "forty-three", "forty-four", "forty-five", "forty-six", "forty-seven",
+    "forty-eight", "forty-nine", "fifty", "fifty-one", "fifty-two", "fifty-three",
+    "fifty-four", "fifty-five", "fifty-six", "fifty-seven", "fifty-eight", "fifty-nine",
+    "sixty", "sixty-one", "sixty-two", "sixty-three", "sixty-four", "sixty-five",
+    "sixty-six", "sixty-seven", "sixty-eight", "sixty-nine", "seventy", "seventy-one",
+    "seventy-two", "seventy-three", "seventy-four", "seventy-five", "seventy-six",
+    "seventy-seven", "seventy-eight", "seventy-nine", "eighty", "eighty-one",
+    "eighty-two", "eighty-three", "eighty-four", "eighty-five", "eighty-six",
+    "eighty-seven", "eighty-eight", "eighty-nine", "ninety", "ninety-one",
+    "ninety-two", "ninety-three", "ninety-four", "ninety-five", "ninety-six",
+    "ninety-seven", "ninety-eight", "ninety-nine"
+};
+
+const single_digit_powers = [_][]const u8 {"thousand", "million", "billion", "trillion", "quadrillion", "quintillion", "sextillion",
+    "septillion", "octillion", "nonillion"};
+
+const double_digit_modifiers = [_][]const u8 {"", "un", "duo", "tre", "quattuor", "quin", "sex", "septen", "octo", "novem"};
+const double_digit_powers = [_][]const u8 {"", "decillion", "vigintillion", "trigintillion", "quadragintillion", "quinquagintillion", "sexagintillion", "septuagintillion", "octogintillion", "nonagintillion"};
+
+const triple_digit_powers = [_][]const u8 {"", "centillion", "ducentillion", "trecentillion", "quadringentillion", "quingentillion", "sescentillion", "septingentillion", "octingentillion", "nongentillion"};
+const triple_double_digit_modifiers = [_][]const u8 {"", "deci", "viginti", "triginta", "quadraginta", "quinquaginta", "sexaginta", "septuaginta", "octoginta", "nonaginta"};
+const triple_single_digit_modifiers = [_][]const u8 {"", "un", "duo", "tres", "quattuor", "quin", "sex", "septen", "octo", "novem"};
+
+const quadruple_digit_powers = [_][]const u8 {"", "milli", "duomilli", "tremilli", "quattuormilli", "quinqumilli", "sexmilli", "septemmilli", "octomilli", "novemmilli"};
+const quadruple_triple_digit_modifiers = [_][]const u8 {"", "centi", "ducenti", "trecenti", "quadringenti", "quingenti", "sescenti", "septingenti", "octingenti", "nongenti"};
+const quadruple_double_digit_modifiers = [_][]const u8 {"", "deci", "viginti", "triginta", "quadraginta", "quinquaginta", "sexaginta", "septuaginta", "octoginta", "nonaginta"};
+const quadruple_single_digit_modifiers = [_][]const u8 {"", "un", "duo", "tres", "quattuor", "quin", "sex", "septen", "octo", "novem"};
+
+const SizeError = error {
+    SizeError,
+};
+
+pub fn maxIn2DCharArr(comptime arr: anytype) usize {
+    var result : usize = 0;
+    for (arr) |item| {
+        if (item.len > result) {
+            result = item.len;
+        }
+    }
+    return result;
+}
+
+const max_word_size : usize = maxIn2DCharArr(bases) + maxIn2DCharArr(quadruple_digit_powers) + maxIn2DCharArr(quadruple_single_digit_modifiers) + maxIn2DCharArr(quadruple_double_digit_modifiers) + maxIn2DCharArr(quadruple_triple_digit_modifiers) + 5;
+
+pub fn strPushFormat(buffer: [] u8, comptime format: []const u8, items: anytype) !usize {
+    const count = std.fmt.count(format, items);
+    @memmove(buffer[count..], buffer[0..buffer.len-count]);
+    _ = try std.fmt.bufPrint(buffer[0..count], format, items);
+    return count;
+}
+
+pub fn injectUnderThousandNum(buffer: []u8, num: u10) !void {
+    if (num >= 100) {
+        if (num % 100 != 0) {
+            _ = try strPushFormat(buffer, "{s} hundred {s} ", .{bases[num / 100], bases[num % 100]});
+        } else {
+            _ = try strPushFormat(buffer, " {s} ", .{bases[num % 100]});
+        }
+    } else {
+        _ = try strPushFormat(buffer, "{s} ", .{bases[num]});
+    }
+}
+
+pub fn strConcatFormat(buffer: []u8, filled: usize, comptime format : []const u8, items: anytype) !usize {
+    const count = std.fmt.count(format, items);
+    _ = try std.fmt.bufPrint(buffer[filled..filled+count], format, items);
+    return count;
+}
+
+pub fn wordFromPower(num: u16) ![]u8 {
+    if (num < 3) {
+        const result = try allocator.alloc(u8, 0);
+        return result;
+    }
+    const exp_num = num / 3 - 1;
+    var result = try allocator.alloc(u8, 256);
+    @memset(result, 0);
+    var filled : usize = 0;
+    if (exp_num >= 1000) {
+        const power_index = exp_num / 1000 % quadruple_digit_powers.len;
+        filled += try strConcatFormat(result, filled, "{s}", .{quadruple_digit_powers[power_index]});
+        filled += try strConcatFormat(result, filled, "{s}", .{quadruple_triple_digit_modifiers[exp_num / 100 % quadruple_triple_digit_modifiers.len]});
+        filled += try strConcatFormat(result, filled, "{s}", .{quadruple_double_digit_modifiers[exp_num / 10 % quadruple_double_digit_modifiers.len]});
+        filled += try strConcatFormat(result, filled, "{s}", .{quadruple_single_digit_modifiers[exp_num % 10]});
+        if (filled >= 5) {
+            if (std.mem.startsWith(u8, result[filled-5..], "milli"[0..])) {
+                filled += try strConcatFormat(result, filled, "{s}", .{"n"});
+            }
+        }
+        filled += try strConcatFormat(result, filled, "{s}", .{"illion"});
+    } else if (exp_num >= 100) {
+        filled += try strConcatFormat(result, filled, "{s}", .{triple_single_digit_modifiers[exp_num % 10]});
+        filled += try strConcatFormat(result, filled, "{s}", .{triple_double_digit_modifiers[exp_num / 10 % triple_double_digit_modifiers.len]});
+        filled += try strConcatFormat(result, filled, "{s}", .{triple_digit_powers[exp_num / 100 % triple_digit_powers.len]});
+    } else if (exp_num >= 10) {
+        filled += try strConcatFormat(result, filled, "{s}{s}", .{double_digit_modifiers[exp_num % double_digit_modifiers.len], double_digit_powers[exp_num / 10 % double_digit_powers.len]});
+    } else {
+        filled += try strConcatFormat(result, filled, "{s}", .{single_digit_powers[exp_num % single_digit_powers.len]});
+    }
+    result = try allocator.realloc(result, filled);
+    return result;
+}
+
+pub fn printOutNum(num : u16384) ![]u8 {
+    var thousandsList : std.ArrayList(u10) = undefined;
+    var result : []u8 = undefined;
+    var res : u16384 = num;
+    if (num == 0) {
+        result = try allocator.alloc(u8, bases[0].len);
+        @memcpy(result[0..bases[0].len], bases[0]);
+        return result;
+    } else {
+        thousandsList = try std.ArrayList(u10).initCapacity(allocator, @as(u64, @truncate(std.math.log10(num) / 3 + 1)));
+        result = try allocator.alloc(u8, thousandsList.capacity * max_word_size);
+        @memset(result, 0);
+    }
+    defer thousandsList.deinit(allocator);
+    while (res != 0) : (res = res / 1000) {
+        const printVal = @as(u10, @truncate(res % 1000));
+        try thousandsList.append(allocator, printVal);
+    }
+    for (thousandsList.items, 0..) |item, i| {
+        if (item == 0) continue;
+        const count = 2;
+        @memmove(result[count..], result[0..result.len-count]);
+        if (i != 0) {
+            result[0] = ',';
+            result[1] = ' ';
+        }
+        const currentWord = try wordFromPower(@as(u16, @truncate(i * 3)));
+        _ = try strPushFormat(result, "{s}", .{currentWord});
+        allocator.free(currentWord);
+        try injectUnderThousandNum(result[0..], item);
+    }
+    var resultSize : usize = undefined;
+    for (result, 0..) |char, i| {
+        if (char == 0) {
+            resultSize = i;
+            break;
+        }
+    }
+    result = try allocator.realloc(result, resultSize);
+    return result;
+}
+
+pub fn main() !void {
+    const args = try std.process.argsAlloc(allocator);
+    const cwd = std.fs.cwd();
+    const file = try cwd.readFileAlloc(allocator, "./bignumber.txt", 65535);
+    const myNum : u16384 = try std.fmt.parseInt(u16384, file, 10);
+    const buf = printOutNum(myNum) catch {
+        std.debug.print("Number is too big!\n", .{});
+        return;
+    };
+    defer {
+        std.process.argsFree(allocator, args);
+        allocator.free(file);
+        allocator.free(buf);
+        const leaky = gpa.deinit();
+        if (leaky == std.heap.Check.leak) {
+            std.debug.print("AAAA leak\n", .{});
+        }
+    }
+    std.debug.print("{s}\n", .{buf});
+
+}
