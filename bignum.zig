@@ -114,10 +114,10 @@ pub fn wordFromPower(num: u16) ![]u8 {
     return result;
 }
 
-pub fn printOutNum(num : u16384) ![]u8 {
+pub fn printOutNum(num : u32768) ![]u8 {
     var thousandsList : std.ArrayList(u10) = undefined;
     var result : []u8 = undefined;
-    var res : u16384 = num;
+    var res : u32768 = num;
     if (num == 0) {
         result = try allocator.alloc(u8, bases[0].len);
         @memcpy(result[0..bases[0].len], bases[0]);
@@ -159,9 +159,9 @@ pub fn printOutNum(num : u16384) ![]u8 {
 pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
     const cwd = std.fs.cwd();
-    const file = try cwd.readFileAlloc(allocator, "./bignumber.txt", 65535);
-    const myNum : u16384 = try std.fmt.parseInt(u16384, file, 10);
-    const buf = printOutNum(myNum) catch {
+    const file = try cwd.readFileAlloc(allocator, "./bignumber.txt", 32768);
+    const my_num : u32768 = try std.fmt.parseInt(u32768, file, 10);
+    const buf = printOutNum(my_num) catch {
         std.debug.print("Number is too big!\n", .{});
         return;
     };
@@ -174,6 +174,10 @@ pub fn main() !void {
             std.debug.print("AAAA leak\n", .{});
         }
     }
+    const highest_power = std.math.log(u32768, 10, my_num);
+    const highest_word_power = highest_power - (highest_power % 3);
+    const highest_cardinal = (highest_word_power - 3) / 3;
+    std.debug.print("Value of item is 10^{d} (largest number word is 10^{d} or the cardinal sequence {d})\n", .{highest_power, highest_word_power, highest_cardinal});
     std.debug.print("{s}\n", .{buf});
 
 }
