@@ -1,4 +1,4 @@
-const std = @import("std"); // works with version 0.15.1
+const std = @import("std"); // works with version 0.15.1+
 const bignum = @import("bignum");
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
@@ -114,22 +114,34 @@ pub fn wordFromPower(num: u16) ![]u8 {
     return result;
 }
 
-pub fn printOutNum(num : u32768) ![]u8 {
+pub fn printOutNum(num : std.math.big.int.Managed) ![]u8 {
     var thousandsList : std.ArrayList(u10) = undefined;
     var result : []u8 = undefined;
-    var res : u32768 = num;
-    if (num == 0) {
+    var res : std.math.big.int.Managed = try num.clone();
+    var thousandManaged = try std.math.big.int.Managed.initSet(allocator, 1000);
+    defer res.deinit();
+    const numStr = try num.toString(allocator, 10, std.fmt.Case.lower);
+    defer allocator.free(numStr);
+    const numLen = numStr.len;
+    if (num.eqlZero() == true) {
         result = try allocator.alloc(u8, bases[0].len);
         @memcpy(result[0..bases[0].len], bases[0]);
         return result;
     } else {
-        thousandsList = try std.ArrayList(u10).initCapacity(allocator, @as(u64, @truncate(std.math.log10(num) / 3 + 1)));
+        thousandsList = try std.ArrayList(u10).initCapacity(allocator, numLen / 3 + 1);//@as(u64, @truncate(std.math.log10(num) / 3 + 1)));
         result = try allocator.alloc(u8, thousandsList.capacity * max_word_size);
         @memset(result, 0);
     }
     defer thousandsList.deinit(allocator);
-    while (res != 0) : (res = res / 1000) {
-        const printVal = @as(u10, @truncate(res % 1000));
+    var dummy_remainder = try std.math.big.int.Managed.init(allocator);
+    defer dummy_remainder.deinit();
+    while (res.eqlZero() == false) : (try res.divFloor(&dummy_remainder, &res, &thousandManaged)) {
+        var quotient = try std.math.big.int.Managed.init(allocator);
+        defer quotient.deinit();
+        var remainder = try std.math.big.int.Managed.init(allocator);
+        defer remainder.deinit();
+        try std.math.big.int.Managed.divFloor(&quotient, &remainder, &res, &thousandManaged);
+        const printVal = try remainder.toInt(u10);
         try thousandsList.append(allocator, printVal);
     }
     for (thousandsList.items, 0..) |item, i| {
@@ -153,6 +165,7 @@ pub fn printOutNum(num : u32768) ![]u8 {
         }
     }
     result = try allocator.realloc(result, resultSize);
+    thousandManaged.deinit();
     return result;
 }
 
@@ -160,12 +173,14 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
     const cwd = std.fs.cwd();
     const file = try cwd.readFileAlloc(allocator, "./bignumber.txt", 32768);
-    const my_num : u32768 = try std.fmt.parseInt(u32768, file, 10);
+    var my_num = try std.math.big.int.Managed.init(allocator);
+    try my_num.setString(10, file);
     const buf = printOutNum(my_num) catch {
         std.debug.print("Number is too big!\n", .{});
         return;
     };
     defer {
+        my_num.deinit();
         std.process.argsFree(allocator, args);
         allocator.free(file);
         allocator.free(buf);
@@ -174,7 +189,9 @@ pub fn main() !void {
             std.debug.print("AAAA leak\n", .{});
         }
     }
-    const highest_power = std.math.log(u32768, 10, my_num);
+    const my_num_str = try my_num.toString(allocator, 10, std.fmt.Case.lower);
+    defer allocator.free(my_num_str);
+    const highest_power = my_num_str.len - 1;
     const highest_word_power = highest_power - (highest_power % 3);
     const highest_cardinal = (highest_word_power - 3) / 3;
     std.debug.print("Value of item is 10^{d} (largest number word is 10^{d} or the cardinal sequence {d})\n", .{highest_power, highest_word_power, highest_cardinal});
