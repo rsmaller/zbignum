@@ -115,36 +115,32 @@ pub fn wordFromPower(num: u16) ![]u8 {
 }
 
 pub fn printOutNum(num : std.math.big.int.Managed) ![]u8 {
-    var thousandsList : std.ArrayList(u10) = undefined;
+    var thousands_list : std.ArrayList(u10) = undefined;
     var result : []u8 = undefined;
     var res : std.math.big.int.Managed = try num.clone();
-    var thousandManaged = try std.math.big.int.Managed.initSet(allocator, 1000);
-    defer res.deinit();
-    const numStr = try num.toString(allocator, 10, std.fmt.Case.lower);
-    defer allocator.free(numStr);
-    const numLen = numStr.len;
+    var thousand_managed = try std.math.big.int.Managed.initSet(allocator, 1000);
+    const num_str = try num.toString(allocator, 10, std.fmt.Case.lower);
+    const num_len = num_str.len;
     if (num.eqlZero() == true) {
         result = try allocator.alloc(u8, bases[0].len);
         @memcpy(result[0..bases[0].len], bases[0]);
         return result;
     } else {
-        thousandsList = try std.ArrayList(u10).initCapacity(allocator, numLen / 3 + 1);//@as(u64, @truncate(std.math.log10(num) / 3 + 1)));
-        result = try allocator.alloc(u8, thousandsList.capacity * max_word_size);
+        thousands_list = try std.ArrayList(u10).initCapacity(allocator, num_len / 3 + 1);//@as(u64, @truncate(std.math.log10(num) / 3 + 1)));
+        result = try allocator.alloc(u8, thousands_list.capacity * max_word_size);
         @memset(result, 0);
     }
-    defer thousandsList.deinit(allocator);
     var dummy_remainder = try std.math.big.int.Managed.init(allocator);
-    defer dummy_remainder.deinit();
-    while (res.eqlZero() == false) : (try res.divFloor(&dummy_remainder, &res, &thousandManaged)) {
+    while (res.eqlZero() == false) : (try res.divFloor(&dummy_remainder, &res, &thousand_managed)) {
         var quotient = try std.math.big.int.Managed.init(allocator);
-        defer quotient.deinit();
         var remainder = try std.math.big.int.Managed.init(allocator);
+        defer quotient.deinit();
         defer remainder.deinit();
-        try std.math.big.int.Managed.divFloor(&quotient, &remainder, &res, &thousandManaged);
+        try std.math.big.int.Managed.divFloor(&quotient, &remainder, &res, &thousand_managed);
         const printVal = try remainder.toInt(u10);
-        try thousandsList.append(allocator, printVal);
+        try thousands_list.append(allocator, printVal);
     }
-    for (thousandsList.items, 0..) |item, i| {
+    for (thousands_list.items, 0..) |item, i| {
         if (item == 0) continue;
         const count = 2;
         @memmove(result[count..], result[0..result.len-count]);
@@ -157,15 +153,21 @@ pub fn printOutNum(num : std.math.big.int.Managed) ![]u8 {
         allocator.free(currentWord);
         try injectUnderThousandNum(result[0..], item);
     }
-    var resultSize : usize = undefined;
+    var result_size : usize = undefined;
     for (result, 0..) |char, i| {
         if (char == 0) {
-            resultSize = i;
+            result_size = i;
             break;
         }
     }
-    result = try allocator.realloc(result, resultSize);
-    thousandManaged.deinit();
+    result = try allocator.realloc(result, result_size);
+    defer {
+        res.deinit();
+        allocator.free(num_str);
+        thousands_list.deinit(allocator);
+        dummy_remainder.deinit();
+        thousand_managed.deinit();
+    }
     return result;
 }
 
@@ -179,22 +181,21 @@ pub fn main() !void {
         std.debug.print("Number is too big!\n", .{});
         return;
     };
-    defer {
-        my_num.deinit();
-        std.process.argsFree(allocator, args);
-        allocator.free(file);
-        allocator.free(buf);
-        const leaky = gpa.deinit();
-        if (leaky == std.heap.Check.leak) {
-            std.debug.print("AAAA leak\n", .{});
-        }
-    }
     const my_num_str = try my_num.toString(allocator, 10, std.fmt.Case.lower);
-    defer allocator.free(my_num_str);
     const highest_power = my_num_str.len - 1;
     const highest_word_power = highest_power - (highest_power % 3);
     const highest_cardinal = (highest_word_power - 3) / 3;
     std.debug.print("Value of item is 10^{d} (largest number word is 10^{d} or the cardinal sequence {d})\n", .{highest_power, highest_word_power, highest_cardinal});
     std.debug.print("{s}\n", .{buf});
-
+    defer {
+        my_num.deinit();
+        std.process.argsFree(allocator, args);
+        allocator.free(file);
+        allocator.free(buf);
+        allocator.free(my_num_str);
+        const leaky = gpa.deinit();
+        if (leaky == std.heap.Check.leak) {
+            std.debug.print("AAAA leak\n", .{});
+        }
+    }
 }
