@@ -90,8 +90,7 @@ pub fn wordFromPower(num: u16) ![]u8 {
     @memset(result, 0);
     var filled : usize = 0;
     if (exp_num >= 1000) {
-        const power_index = exp_num / 1000 % quadruple_digit_powers.len;
-        filled += try strConcatFormat(result, filled, "{s}", .{quadruple_digit_powers[power_index]});
+        filled += try strConcatFormat(result, filled, "{s}", .{quadruple_digit_powers[exp_num / 1000 % quadruple_digit_powers.len]});
         filled += try strConcatFormat(result, filled, "{s}", .{quadruple_triple_digit_modifiers[exp_num / 100 % quadruple_triple_digit_modifiers.len]});
         filled += try strConcatFormat(result, filled, "{s}", .{quadruple_double_digit_modifiers[exp_num / 10 % quadruple_double_digit_modifiers.len]});
         filled += try strConcatFormat(result, filled, "{s}", .{quadruple_single_digit_modifiers[exp_num % 10]});
