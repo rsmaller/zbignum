@@ -45,6 +45,9 @@ const quintuple_triple_digit_modifiers = [_][]const u8 {"", "centi", "ducenti", 
 const quintuple_double_digit_modifiers = [_][]const u8 {"", "deci", "viginti", "triginta", "quadraginta", "quinquaginta", "sexaginta", "septuaginta", "octoginta", "nonaginta"};
 const quintuple_single_digit_modifiers = [_][]const u8 {"", "un", "duo", "tres", "quattuor", "quin", "sex", "septen", "octo", "novem"};
 
+const myria_ones = [_][]const u8 {"", "un", "duo", "tres", "quattuor", "quin", "sex", "septen", "octo", "novem"};
+const myria_tens = [_][]const u8 {"", "deci", "viginti", "triginta", "quadraginta", "quinquaginta", "sexaginta", "septuaginta", "octoginta", "nonaginta"};
+
 const SizeError = error {
     SizeError,
 };
@@ -94,13 +97,25 @@ pub fn wordFromPower(num: u64) ![]u8 {
         return result;
     }
     const exp_num = num / 3 - 1;
-    if (exp_num >= 100000) {
-        return error.SizeError;
-    }
+    // if (exp_num >= 100000) {
+    //     return error.SizeError;
+    // }
     var result = try allocator.alloc(u8, 256);
     @memset(result, 0);
     var filled : usize = 0;
-    if (exp_num >= 10000) {
+    if (exp_num >= 100000) {
+        var exp_calc = exp_num;
+        while (exp_calc > 0) { // change to >= 1000 and add sub-1000 naming scheme from the >= 100 section. do sub-1000 first and tack on myria after, dividing by 100 each time until only div 10 is left.
+            filled += try strConcatFormat(result, filled, "{s}", .{myria_tens[exp_calc / 10 % 10]});
+            filled += try strConcatFormat(result, filled, "{s}", .{myria_tens[exp_calc % 10]});
+            if (exp_calc % 100 != 0) {
+                filled += try strConcatFormat(result, filled, "{s}", .{"myria"});
+            }
+            // add if num >= 10k div 100, otherwise div 10???
+            exp_calc /= 100;
+        }
+        filled += try strConcatFormat(result, filled, "{s}", .{"illion"});
+    } else if (exp_num >= 10000) {
         filled += try strConcatFormat(result, filled, "{s}", .{quintuple_digit_modifiers[exp_num / 1000 % quintuple_digit_powers.len]});
         filled += try strConcatFormat(result, filled, "{s}", .{quintuple_digit_powers[exp_num / 10000 % quintuple_digit_powers.len]});
         filled += try strConcatFormat(result, filled, "{s}", .{"milli"});
@@ -149,7 +164,7 @@ pub fn printOutNum(num : std.math.big.int.Managed) ![]u8 {
         @memcpy(result[0..bases[0].len], bases[0]);
         return result;
     } else {
-        thousands_list = try std.ArrayList(u10).initCapacity(allocator, num_len / 3 + 1);//@as(u64, @truncate(std.math.log10(num) / 3 + 1)));
+        thousands_list = try std.ArrayList(u10).initCapacity(allocator, num_len / 3 + 1);
         result = try allocator.alloc(u8, thousands_list.capacity * max_word_size);
         @memset(result, 0);
     }
