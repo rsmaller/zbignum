@@ -88,7 +88,7 @@ pub fn strConcatFormat(buffer: []u8, filled: usize, comptime format : []const u8
     return count;
 }
 
-pub fn wordFromPower(num: u16) ![]u8 {
+pub fn wordFromPower(num: u64) ![]u8 {
     if (num < 3) {
         const result = try allocator.alloc(u8, 0);
         return result;
@@ -171,7 +171,7 @@ pub fn printOutNum(num : std.math.big.int.Managed) ![]u8 {
             result[0] = ',';
             result[1] = ' ';
         }
-        const currentWord = try wordFromPower(@as(u16, @truncate(i * 3)));
+        const currentWord = try wordFromPower(@as(u64, @truncate(i * 3)));
         _ = try strPushFormat(result, "{s}", .{currentWord});
         allocator.free(currentWord);
         try injectUnderThousandNum(result[0..], item);
