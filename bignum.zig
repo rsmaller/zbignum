@@ -32,7 +32,7 @@ const double_digit_powers = [_][]const u8 {"", "decillion", "vigintillion", "tri
 
 const triple_digit_powers = [_][]const u8 {"", "centillion", "ducentillion", "trecentillion", "quadringentillion", "quingentillion", "sescentillion", "septingentillion", "octingentillion", "nongentillion"};
 const triple_double_digit_modifiers = [_][]const u8 {"", "deci", "viginti", "triginta", "quadraginta", "quinquaginta", "sexaginta", "septuaginta", "octoginta", "nonaginta"};
-const triple_single_digit_modifiers = [_][]const u8 {"", "un", "duo", "tres", "quattuor", "quin", "sex", "septen", "octo", "novem"};
+const triple_single_digit_modifiers = [_][]const u8 {"", "un", "duo", "tre", "quattuor", "quin", "sex", "septen", "octo", "novem"};
 
 const quadruple_digit_powers = [_][]const u8 {"", "milli", "duomilli", "tremilli", "quattuormilli", "quinqumilli", "sexmilli", "septemmilli", "octomilli", "novemmilli"};
 const quadruple_triple_digit_modifiers = [_][]const u8 {"", "centi", "ducenti", "trecenti", "quadringenti", "quingenti", "sescenti", "septingenti", "octingenti", "nongenti"};
@@ -44,9 +44,6 @@ const quintuple_digit_modifiers = [_][]const u8 {"", "un", "duo", "tres", "quatt
 const quintuple_triple_digit_modifiers = [_][]const u8 {"", "centi", "ducenti", "trecenti", "quadringenti", "quingenti", "sescenti", "septingenti", "octingenti", "nongenti"};
 const quintuple_double_digit_modifiers = [_][]const u8 {"", "deci", "viginti", "triginta", "quadraginta", "quinquaginta", "sexaginta", "septuaginta", "octoginta", "nonaginta"};
 const quintuple_single_digit_modifiers = [_][]const u8 {"", "un", "duo", "tres", "quattuor", "quin", "sex", "septen", "octo", "novem"};
-
-const myria_ones = [_][]const u8 {"", "un", "duo", "tres", "quattuor", "quin", "sex", "septen", "octo", "novem"};
-const myria_tens = [_][]const u8 {"", "deci", "viginti", "triginta", "quadraginta", "quinquaginta", "sexaginta", "septuaginta", "octoginta", "nonaginta"};
 
 const SizeError = error {
     SizeError,
@@ -97,24 +94,11 @@ pub fn wordFromPower(num: u64) ![]u8 {
         return result;
     }
     const exp_num = num / 3 - 1;
-    // if (exp_num >= 100000) {
-    //     return error.SizeError;
-    // }
     var result = try allocator.alloc(u8, 256);
     @memset(result, 0);
     var filled : usize = 0;
     if (exp_num >= 100000) {
-        var exp_calc = exp_num;
-        while (exp_calc > 0) { // change to >= 1000 and add sub-1000 naming scheme from the >= 100 section. do sub-1000 first and tack on myria after, dividing by 100 each time until only div 10 is left.
-            filled += try strConcatFormat(result, filled, "{s}", .{myria_tens[exp_calc / 10 % 10]});
-            filled += try strConcatFormat(result, filled, "{s}", .{myria_tens[exp_calc % 10]});
-            if (exp_calc % 100 != 0) {
-                filled += try strConcatFormat(result, filled, "{s}", .{"myria"});
-            }
-            // add if num >= 10k div 100, otherwise div 10???
-            exp_calc /= 100;
-        }
-        filled += try strConcatFormat(result, filled, "{s}", .{"illion"});
+        return error.SizeError;
     } else if (exp_num >= 10000) {
         filled += try strConcatFormat(result, filled, "{s}", .{quintuple_digit_modifiers[exp_num / 1000 % quintuple_digit_powers.len]});
         filled += try strConcatFormat(result, filled, "{s}", .{quintuple_digit_powers[exp_num / 10000 % quintuple_digit_powers.len]});
