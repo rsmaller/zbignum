@@ -45,7 +45,7 @@ const quintuple_triple_digit_modifiers = [_][]const u8 {"", "centi", "ducenti", 
 const quintuple_double_digit_modifiers = [_][]const u8 {"", "deci", "viginti", "triginta", "quadraginta", "quinquaginta", "sexaginta", "septuaginta", "octoginta", "nonaginta"};
 const quintuple_single_digit_modifiers = [_][]const u8 {"", "un", "duo", "tres", "quattuor", "quin", "sex", "septen", "octo", "novem"};
 
-const myria_ones = [_][]const u8 {"", "un", "duo", "tres", "quattuor", "quin", "sex", "septen", "octo", "novem"};
+const myria_ones = [_][]const u8 {"myr", "un", "duo", "tres", "quattuor", "quin", "sex", "septen", "octo", "novem"};
 const myria_tens = [_][]const u8 {"", "deci", "viginti", "triginta", "quadraginta", "quinquaginta", "sexaginta", "septuaginta", "octoginta", "nonaginta"};
 
 const SizeError = error {
@@ -97,24 +97,11 @@ pub fn wordFromPower(num: u64) ![]u8 {
         return result;
     }
     const exp_num = num / 3 - 1;
-    // if (exp_num >= 100000) {
-    //     return error.SizeError;
-    // }
     var result = try allocator.alloc(u8, 256);
     @memset(result, 0);
     var filled : usize = 0;
     if (exp_num >= 100000) {
-        var exp_calc = exp_num;
-        while (exp_calc > 0) { // change to >= 1000 and add sub-1000 naming scheme from the >= 100 section. do sub-1000 first and tack on myria after, dividing by 100 each time until only div 10 is left.
-            filled += try strConcatFormat(result, filled, "{s}", .{myria_tens[exp_calc / 10 % 10]});
-            filled += try strConcatFormat(result, filled, "{s}", .{myria_tens[exp_calc % 10]});
-            if (exp_calc % 100 != 0) {
-                filled += try strConcatFormat(result, filled, "{s}", .{"myria"});
-            }
-            // add if num >= 10k div 100, otherwise div 10???
-            exp_calc /= 100;
-        }
-        filled += try strConcatFormat(result, filled, "{s}", .{"illion"});
+        return error.SizeError;
     } else if (exp_num >= 10000) {
         filled += try strConcatFormat(result, filled, "{s}", .{quintuple_digit_modifiers[exp_num / 1000 % quintuple_digit_powers.len]});
         filled += try strConcatFormat(result, filled, "{s}", .{quintuple_digit_powers[exp_num / 10000 % quintuple_digit_powers.len]});
@@ -211,27 +198,29 @@ pub fn printOutNum(num : std.math.big.int.Managed) ![]u8 {
 
 pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
-    const cwd = std.fs.cwd();
-    const file = try cwd.readFileAlloc(allocator, "./bignumber.txt", std.math.maxInt(usize));
-    var my_num = try std.math.big.int.Managed.init(allocator);
-    try my_num.setString(10, file);
-    const buf = printOutNum(my_num) catch {
-        std.debug.print("Number is too big!\n", .{});
-        return;
-    };
-    const my_num_str = try my_num.toString(allocator, 10, std.fmt.Case.lower);
-    const highest_power = my_num_str.len - 1;
-    const roughly_needed_bits = std.math.ceil(@as(f64, @floatFromInt(highest_power + 1)) * std.math.log2(@as(f64, 10.0))) + 1;
-    const highest_word_power = highest_power - (highest_power % 3);
-    const highest_cardinal = (highest_word_power - 3) / 3;
-    std.debug.print("Value of item is 10^{d} and needs roughly {d} bits to represent (largest number word is 10^{d} or the cardinal sequence {d})\n", .{highest_power, roughly_needed_bits, highest_word_power, highest_cardinal});
+    // const cwd = std.fs.cwd();
+    // const file = try cwd.readFileAlloc(allocator, "./bignumber.txt", std.math.maxInt(usize));
+    // var my_num = try std.math.big.int.Managed.init(allocator);
+    // try my_num.setString(10, file);
+    // const buf = printOutNum(my_num) catch {
+    //     std.debug.print("Number is too big!\n", .{});
+    //     return;
+    // };
+    const buf = try wordFromPower(try std.fmt.parseInt(u64, args[1], 10));
     std.debug.print("{s}\n", .{buf});
+    // const my_num_str = try my_num.toString(allocator, 10, std.fmt.Case.lower);
+    // const highest_power = my_num_str.len - 1;
+    // const roughly_needed_bits = std.math.ceil(@as(f64, @floatFromInt(highest_power + 1)) * std.math.log2(@as(f64, 10.0))) + 1;
+    // const highest_word_power = highest_power - (highest_power % 3);
+    // const highest_cardinal = (highest_word_power - 3) / 3;
+    // std.debug.print("Value of item is 10^{d} and needs roughly {d} bits to represent (largest number word is 10^{d} or the cardinal sequence {d})\n", .{highest_power, roughly_needed_bits, highest_word_power, highest_cardinal});
+    // std.debug.print("{s}\n", .{buf});
     defer {
-        my_num.deinit();
+    //     my_num.deinit();
         std.process.argsFree(allocator, args);
-        allocator.free(file);
+    //     allocator.free(file);
         allocator.free(buf);
-        allocator.free(my_num_str);
+    //     allocator.free(my_num_str);
         const leaky = gpa.deinit();
         if (leaky == std.heap.Check.leak) {
             std.debug.print("AAAA leak\n", .{});
