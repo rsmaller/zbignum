@@ -32,7 +32,7 @@ const double_digit_powers = [_][]const u8 {"", "decillion", "vigintillion", "tri
 
 const triple_digit_powers = [_][]const u8 {"", "centillion", "ducentillion", "trecentillion", "quadringentillion", "quingentillion", "sescentillion", "septingentillion", "octingentillion", "nongentillion"};
 const triple_double_digit_modifiers = [_][]const u8 {"", "deci", "viginti", "triginta", "quadraginta", "quinquaginta", "sexaginta", "septuaginta", "octoginta", "nonaginta"};
-const triple_single_digit_modifiers = [_][]const u8 {"", "un", "duo", "tres", "quattuor", "quin", "sex", "septen", "octo", "novem"};
+const triple_single_digit_modifiers = [_][]const u8 {"", "un", "duo", "tre", "quattuor", "quin", "sex", "septen", "octo", "novem"};
 
 const quadruple_digit_powers = [_][]const u8 {"", "milli", "duomilli", "tremilli", "quattuormilli", "quinqumilli", "sexmilli", "septemmilli", "octomilli", "novemmilli"};
 const quadruple_triple_digit_modifiers = [_][]const u8 {"", "centi", "ducenti", "trecenti", "quadringenti", "quingenti", "sescenti", "septingenti", "octingenti", "nongenti"};
@@ -44,9 +44,6 @@ const quintuple_digit_modifiers = [_][]const u8 {"", "un", "duo", "tres", "quatt
 const quintuple_triple_digit_modifiers = [_][]const u8 {"", "centi", "ducenti", "trecenti", "quadringenti", "quingenti", "sescenti", "septingenti", "octingenti", "nongenti"};
 const quintuple_double_digit_modifiers = [_][]const u8 {"", "deci", "viginti", "triginta", "quadraginta", "quinquaginta", "sexaginta", "septuaginta", "octoginta", "nonaginta"};
 const quintuple_single_digit_modifiers = [_][]const u8 {"", "un", "duo", "tres", "quattuor", "quin", "sex", "septen", "octo", "novem"};
-
-const myria_ones = [_][]const u8 {"myr", "un", "duo", "tres", "quattuor", "quin", "sex", "septen", "octo", "novem"};
-const myria_tens = [_][]const u8 {"", "deci", "viginti", "triginta", "quadraginta", "quinquaginta", "sexaginta", "septuaginta", "octoginta", "nonaginta"};
 
 const SizeError = error {
     SizeError,
@@ -198,29 +195,27 @@ pub fn printOutNum(num : std.math.big.int.Managed) ![]u8 {
 
 pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
-    // const cwd = std.fs.cwd();
-    // const file = try cwd.readFileAlloc(allocator, "./bignumber.txt", std.math.maxInt(usize));
-    // var my_num = try std.math.big.int.Managed.init(allocator);
-    // try my_num.setString(10, file);
-    // const buf = printOutNum(my_num) catch {
-    //     std.debug.print("Number is too big!\n", .{});
-    //     return;
-    // };
-    const buf = try wordFromPower(try std.fmt.parseInt(u64, args[1], 10));
+    const cwd = std.fs.cwd();
+    const file = try cwd.readFileAlloc(allocator, "./bignumber.txt", std.math.maxInt(usize));
+    var my_num = try std.math.big.int.Managed.init(allocator);
+    try my_num.setString(10, file);
+    const buf = printOutNum(my_num) catch {
+        std.debug.print("Number is too big!\n", .{});
+        return;
+    };
+    const my_num_str = try my_num.toString(allocator, 10, std.fmt.Case.lower);
+    const highest_power = my_num_str.len - 1;
+    const roughly_needed_bits = std.math.ceil(@as(f64, @floatFromInt(highest_power + 1)) * std.math.log2(@as(f64, 10.0))) + 1;
+    const highest_word_power = highest_power - (highest_power % 3);
+    const highest_cardinal = (highest_word_power - 3) / 3;
+    std.debug.print("Value of item is 10^{d} and needs roughly {d} bits to represent (largest number word is 10^{d} or the cardinal sequence {d})\n", .{highest_power, roughly_needed_bits, highest_word_power, highest_cardinal});
     std.debug.print("{s}\n", .{buf});
-    // const my_num_str = try my_num.toString(allocator, 10, std.fmt.Case.lower);
-    // const highest_power = my_num_str.len - 1;
-    // const roughly_needed_bits = std.math.ceil(@as(f64, @floatFromInt(highest_power + 1)) * std.math.log2(@as(f64, 10.0))) + 1;
-    // const highest_word_power = highest_power - (highest_power % 3);
-    // const highest_cardinal = (highest_word_power - 3) / 3;
-    // std.debug.print("Value of item is 10^{d} and needs roughly {d} bits to represent (largest number word is 10^{d} or the cardinal sequence {d})\n", .{highest_power, roughly_needed_bits, highest_word_power, highest_cardinal});
-    // std.debug.print("{s}\n", .{buf});
     defer {
-    //     my_num.deinit();
+        my_num.deinit();
         std.process.argsFree(allocator, args);
-    //     allocator.free(file);
+        allocator.free(file);
         allocator.free(buf);
-    //     allocator.free(my_num_str);
+        allocator.free(my_num_str);
         const leaky = gpa.deinit();
         if (leaky == std.heap.Check.leak) {
             std.debug.print("AAAA leak\n", .{});
