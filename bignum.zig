@@ -49,6 +49,10 @@ const SizeError = error {
     SizeError,
 };
 
+const BufferFullError = error {
+    BufferFullError,
+};
+
 pub fn maxIn2DCharArr(comptime arr: anytype) usize {
     var result : usize = 0;
     for (arr) |item| {
@@ -59,33 +63,41 @@ pub fn maxIn2DCharArr(comptime arr: anytype) usize {
     return result;
 }
 
-const max_word_size : usize = maxIn2DCharArr(bases) + maxIn2DCharArr(quintuple_digit_powers) + maxIn2DCharArr(quintuple_digit_modifiers)
-    + maxIn2DCharArr(quintuple_single_digit_modifiers) + maxIn2DCharArr(quintuple_double_digit_modifiers) 
-    + maxIn2DCharArr(quintuple_triple_digit_modifiers) + 10;
+const max_word_size : usize = 2048;
 
-pub fn strPushFormat(buffer: [] u8, comptime format: []const u8, items: anytype) !usize {
-    const count = std.fmt.count(format, items);
-    @memmove(buffer[count..], buffer[0..buffer.len-count]);
-    _ = try std.fmt.bufPrint(buffer[0..count], format, items);
-    return count;
-}
+// pub fn strPushFormat(buffer: [] u8, filled: usize, comptime format: []const u8, items: anytype) !usize {
+//     const count = std.fmt.count(format, items);
+//     if (filled + count >= buffer.len) {
+//         return error.BufferFullError;
+//     }
+//     @memmove(buffer[count..], buffer[0..buffer.len-count]);
+//     _ = try std.fmt.bufPrint(buffer[0..count], format, items);
+//     return count;
+// }
 
-pub fn injectUnderThousandNum(buffer: []u8, num: u10) !void {
+pub fn injectUnderThousandNum(buffer: []u8, filled: usize, num: u10) !usize {
     if (num >= 100) {
         if (num % 100 != 0) {
-            _ = try strPushFormat(buffer, "{s} hundred {s} ", .{bases[num / 100], bases[num % 100]});
+            return try strConcatFormat(buffer, filled, "{s} hundred {s} ", .{bases[num / 100], bases[num % 100]});
         } else {
-            _ = try strPushFormat(buffer, " {s} ", .{bases[num % 100]});
+            return try strConcatFormat(buffer, filled, " {s} ", .{bases[num % 100]});
         }
     } else {
-        _ = try strPushFormat(buffer, "{s} ", .{bases[num]});
+        return try strConcatFormat(buffer, filled, "{s} ", .{bases[num]});
     }
 }
 
 pub fn strConcatFormat(buffer: []u8, filled: usize, comptime format : []const u8, items: anytype) !usize {
     const count = std.fmt.count(format, items);
+    if (filled + count >= buffer.len) {
+        return error.BufferFullError;
+    }
     _ = try std.fmt.bufPrint(buffer[filled..filled+count], format, items);
     return count;
+}
+
+pub fn thousandGroupings(num: anytype) @TypeOf(num) {
+    return @as(@TypeOf(num), @intFromFloat(std.math.ceil(std.math.log10(@as(f128, @floatFromInt(num)))))) / 3 + 1;
 }
 
 pub fn wordFromPower(num: u64) ![]u8 {
@@ -94,11 +106,35 @@ pub fn wordFromPower(num: u64) ![]u8 {
         return result;
     }
     const exp_num = num / 3 - 1;
-    var result = try allocator.alloc(u8, 256);
+    var result = try allocator.alloc(u8, max_word_size);
     @memset(result, 0);
     var filled : usize = 0;
     if (exp_num >= 100000) {
-        return error.SizeError;
+        var exp_calc = exp_num;
+        var thousands_list = try std.ArrayList(u10).initCapacity(allocator, thousandGroupings(exp_num));
+        defer thousands_list.deinit(allocator);
+        while (exp_calc > 0) {
+            const current = @as(u10, @truncate(exp_calc % 1000));
+            exp_calc /= 1000;
+            try thousands_list.append(allocator, current);
+        }
+        _ = try reverseArrayList(&thousands_list);
+        for (thousands_list.items, 0..) |item, milli_count_subtractor| {
+            filled += try strConcatFormat(result, filled, "{s}", .{quadruple_triple_digit_modifiers[item / 100 % 10]});
+            filled += try strConcatFormat(result, filled, "{s}", .{triple_double_digit_modifiers[item / 10 % 10]});
+            filled += try strConcatFormat(result, filled, "{s}", .{triple_single_digit_modifiers[item % 10]});
+            const milli_count = thousands_list.items.len - milli_count_subtractor - 1;
+            for (0..milli_count) |_| {
+                filled += try strConcatFormat(result, filled, "{s}", .{"milli"});
+            }
+        }
+        if (filled >= 5 and std.mem.startsWith(u8, result[filled-5..], "milli"[0..])) {
+            filled += try strConcatFormat(result, filled, "{s}", .{"n"});
+        }
+        if (filled >= 1 and !std.mem.startsWith(u8, result[filled-1..], "i"[0..])) {
+            filled += try strConcatFormat(result, filled, "{s}", .{"i"});
+        }
+        filled += try strConcatFormat(result, filled, "{s}", .{"llion"});
     } else if (exp_num >= 10000) {
         filled += try strConcatFormat(result, filled, "{s}", .{quintuple_digit_modifiers[exp_num / 1000 % quintuple_digit_powers.len]});
         filled += try strConcatFormat(result, filled, "{s}", .{quintuple_digit_powers[exp_num / 10000 % quintuple_digit_powers.len]});
@@ -136,6 +172,14 @@ pub fn wordFromPower(num: u64) ![]u8 {
     return result;
 }
 
+pub fn reverseArrayList(list: *std.ArrayList(u10)) !void {
+    for (0..list.items.len / 2) |i| {
+        const swap = list.items[i];
+        list.items[i] = list.items[list.items.len - i - 1];
+        list.items[list.items.len - i - 1] = swap;
+    }
+}
+
 pub fn printOutNum(num : std.math.big.int.Managed) ![]u8 {
     var thousands_list : std.ArrayList(u10) = undefined;
     var result : []u8 = undefined;
@@ -162,18 +206,21 @@ pub fn printOutNum(num : std.math.big.int.Managed) ![]u8 {
         const printVal = try remainder.toInt(u10);
         try thousands_list.append(allocator, printVal);
     }
-    for (thousands_list.items, 0..) |item, i| {
+    var filled : usize = 0;
+    const items = thousands_list.items;
+    var item_index = items.len - 1;
+    while (item_index >= 0) : (item_index -= 1) {
+        const item = items[item_index];
         if (item == 0) continue;
-        const count = 2;
-        @memmove(result[count..], result[0..result.len-count]);
-        if (i != 0) {
-            result[0] = ',';
-            result[1] = ' ';
+        const currentWord = try wordFromPower(@as(u64, @truncate(item_index * 3)));
+        defer allocator.free(currentWord);
+        filled += try injectUnderThousandNum(result[0..], filled, item);
+        filled += try strConcatFormat(result, filled, "{s}", .{currentWord});
+        if (item_index != 0) {
+            filled += try strConcatFormat(result, filled, "{s}", .{", "});
+        } else {
+            break;
         }
-        const currentWord = try wordFromPower(@as(u64, @truncate(i * 3)));
-        _ = try strPushFormat(result, "{s}", .{currentWord});
-        allocator.free(currentWord);
-        try injectUnderThousandNum(result[0..], item);
     }
     var result_size : usize = undefined;
     for (result, 0..) |char, i| {
@@ -210,6 +257,9 @@ pub fn main() !void {
     const highest_cardinal = (highest_word_power - 3) / 3;
     std.debug.print("Value of item is 10^{d} and needs roughly {d} bits to represent (largest number word is 10^{d} or the cardinal sequence {d})\n", .{highest_power, roughly_needed_bits, highest_word_power, highest_cardinal});
     std.debug.print("{s}\n", .{buf});
+    // Add testing here if needed.
+    // const buf = try wordFromPower(198473298471);
+    // std.debug.print("{d} : {s}\n", .{198473298471, buf});
     defer {
         my_num.deinit();
         std.process.argsFree(allocator, args);
