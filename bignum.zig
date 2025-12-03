@@ -1,5 +1,5 @@
 const std = @import("std"); // works with version 0.15.1+
-const bignum = @import("bignum");
+const smallnum = @import("smallnum");
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
 const arena_allocator = std.heap.ArenaAllocator.init(allocator);
@@ -53,6 +53,11 @@ const BufferFullError = error {
     BufferFullError,
 };
 
+pub fn bigIntDigitLength(num: std.math.big.int.Managed) usize {
+    const num_bits = @as(f64, @floatFromInt(num.bitCountAbs()));
+    return @as(usize, @intFromFloat(@floor(std.math.log10(2.0) * num_bits)));
+}
+
 pub fn maxIn2DCharArr(comptime arr: anytype) usize {
     var result : usize = 0;
     for (arr) |item| {
@@ -75,100 +80,113 @@ const max_word_size : usize = 2048;
 //     return count;
 // }
 
+// pub fn strConcatFormat(buffer: []u8, filled: usize, comptime format : []const u8, items: anytype) !usize {
+//     const count = std.fmt.count(format, items);
+//     if (filled + count >= buffer.len) {
+//         return error.BufferFullError;
+//     }
+//     _ = try std.fmt.bufPrint(buffer[filled..filled+count], format, items);
+//     return count;
+// }
+
 pub fn injectUnderThousandNum(buffer: []u8, filled: usize, num: u10) !usize {
+    var current_filled : usize = filled;
     if (num >= 100) {
         if (num % 100 != 0) {
-            return try strConcatFormat(buffer, filled, "{s} hundred {s} ", .{bases[num / 100], bases[num % 100]});
+            current_filled += strConcatLowOverhead(buffer, current_filled, bases[num / 100]);
+            current_filled += strConcatLowOverhead(buffer, current_filled, " hundred ");
+            current_filled += strConcatLowOverhead(buffer, current_filled, bases[num % 100]);
+            current_filled += strConcatLowOverhead(buffer, current_filled, " ");
+            return current_filled - filled;
+
         } else {
-            return try strConcatFormat(buffer, filled, " {s} ", .{bases[num % 100]});
+            current_filled += strConcatLowOverhead(buffer, current_filled, " ");
+            current_filled += strConcatLowOverhead(buffer, current_filled, bases[num % 100]);
+            current_filled += strConcatLowOverhead(buffer, current_filled, " ");
+            return current_filled - filled;
         }
     } else {
-        return try strConcatFormat(buffer, filled, "{s} ", .{bases[num]});
+        current_filled += strConcatLowOverhead(buffer, current_filled, bases[num]);
+        current_filled += strConcatLowOverhead(buffer, current_filled, " ");
+        return current_filled - filled;
     }
 }
 
-pub fn strConcatFormat(buffer: []u8, filled: usize, comptime format : []const u8, items: anytype) !usize {
-    const count = std.fmt.count(format, items);
-    if (filled + count >= buffer.len) {
-        return error.BufferFullError;
-    }
-    _ = try std.fmt.bufPrint(buffer[filled..filled+count], format, items);
-    return count;
+pub inline fn strConcatLowOverhead(buffer: []u8, filled : usize, item: []const u8) usize {
+    @memcpy(buffer[filled..filled+item.len], item);
+    return item.len;
 }
 
 pub fn thousandGroupings(num: anytype) @TypeOf(num) {
     return @as(@TypeOf(num), @intFromFloat(std.math.ceil(std.math.log10(@as(f128, @floatFromInt(num)))))) / 3 + 1;
 }
 
-pub fn wordFromPower(num: u64) ![]u8 {
+pub fn wordFromPower(num: u64, result: []u8) !usize {
     if (num < 3) {
-        return try allocator.alloc(u8, 0);
+        return 0;
     }
     const exp_num = num / 3 - 1;
-    var result = try allocator.alloc(u8, max_word_size);
-    @memset(result, 0);
     var filled : usize = 0;
     if (exp_num >= 100000) {
         var exp_calc = exp_num;
-        var thousands_list = try std.ArrayList(u10).initCapacity(allocator, thousandGroupings(exp_num));
-        defer thousands_list.deinit(allocator);
-        while (exp_calc > 0) {
+        var thousands_index = thousandGroupings(exp_num) - 1;
+        var thousands_arr = try allocator.alloc(u10, thousands_index + 1);
+        defer allocator.free(thousands_arr);
+        while (thousands_index >= 0) : (thousands_index -= 1) {
             const current = @as(u10, @truncate(exp_calc % 1000));
             exp_calc /= 1000;
-            try thousands_list.append(allocator, current);
+            thousands_arr[thousands_index] = current;
+            if (thousands_index == 0) break;
         }
-        _ = try reverseArrayList(&thousands_list);
-        for (thousands_list.items, 0..) |item, milli_count_subtractor| {
-            filled += try strConcatFormat(result, filled, "{s}", .{quadruple_triple_digit_modifiers[item / 100 % 10]});
-            filled += try strConcatFormat(result, filled, "{s}", .{triple_double_digit_modifiers[item / 10 % 10]});
-            filled += try strConcatFormat(result, filled, "{s}", .{triple_single_digit_modifiers[item % 10]});
-            const milli_count = thousands_list.items.len - milli_count_subtractor - 1;
-            for (0..milli_count) |_| {
-                filled += try strConcatFormat(result, filled, "{s}", .{"milli"});
+        for (thousands_arr, 0..) |item, milli_count_subtractor| {
+            filled += strConcatLowOverhead(result, filled, quadruple_triple_digit_modifiers[item / 100 % 10]);
+            filled += strConcatLowOverhead(result, filled, triple_double_digit_modifiers[item / 10 % 10]);
+            filled += strConcatLowOverhead(result, filled, triple_single_digit_modifiers[item % 10]);
+            if (item != 0) {
+                const milli_count = thousands_arr.len - milli_count_subtractor - 1;
+                for (0..milli_count) |_| {
+                    filled += strConcatLowOverhead(result, filled, "milli");
+                }
             }
         }
         if (filled >= 5 and std.mem.startsWith(u8, result[filled-5..], "milli"[0..])) {
-            filled += try strConcatFormat(result, filled, "{s}", .{"n"});
+            filled += strConcatLowOverhead(result, filled, "n");
         }
         if (filled >= 1 and !std.mem.startsWith(u8, result[filled-1..], "i"[0..])) {
-            filled += try strConcatFormat(result, filled, "{s}", .{"i"});
+            filled += strConcatLowOverhead(result, filled, "i");
         }
-        filled += try strConcatFormat(result, filled, "{s}", .{"llion"});
+        filled += strConcatLowOverhead(result, filled, "illion");
     } else if (exp_num >= 10000) {
-        filled += try strConcatFormat(result, filled, "{s}", .{quintuple_digit_modifiers[exp_num / 1000 % quintuple_digit_powers.len]});
-        filled += try strConcatFormat(result, filled, "{s}", .{quintuple_digit_powers[exp_num / 10000 % quintuple_digit_powers.len]});
-        filled += try strConcatFormat(result, filled, "{s}", .{"milli"});
-        filled += try strConcatFormat(result, filled, "{s}", .{quintuple_triple_digit_modifiers[exp_num / 100 % quintuple_triple_digit_modifiers.len]});
-        filled += try strConcatFormat(result, filled, "{s}", .{quintuple_double_digit_modifiers[exp_num / 10 % quintuple_double_digit_modifiers.len]});
-        filled += try strConcatFormat(result, filled, "{s}", .{quintuple_single_digit_modifiers[exp_num % 10]});
-        if (filled >= 5) {
-            if (std.mem.startsWith(u8, result[filled-5..], "milli"[0..])) {
-                filled += try strConcatFormat(result, filled, "{s}", .{"n"});
-            }
+        filled += strConcatLowOverhead(result, filled, quintuple_digit_modifiers[exp_num / 1000 % quintuple_digit_powers.len]);
+        filled += strConcatLowOverhead(result, filled, quintuple_digit_powers[exp_num / 10000 % quintuple_digit_powers.len]);
+        filled += strConcatLowOverhead(result, filled, "milli");
+        filled += strConcatLowOverhead(result, filled, quintuple_triple_digit_modifiers[exp_num / 100 % quintuple_triple_digit_modifiers.len]);
+        filled += strConcatLowOverhead(result, filled, quintuple_double_digit_modifiers[exp_num / 10 % quintuple_double_digit_modifiers.len]);
+        filled += strConcatLowOverhead(result, filled, quintuple_single_digit_modifiers[exp_num % 10]);
+        if (filled >= 5 and std.mem.startsWith(u8, result[filled-5..], "milli"[0..])) {
+            filled += strConcatLowOverhead(result, filled, "n");
         }
-        filled += try strConcatFormat(result, filled, "{s}", .{"illion"});
+        filled += strConcatLowOverhead(result, filled, "illion");
     } else if (exp_num >= 1000) {
-        filled += try strConcatFormat(result, filled, "{s}", .{quadruple_digit_powers[exp_num / 1000 % quadruple_digit_powers.len]});
-        filled += try strConcatFormat(result, filled, "{s}", .{quadruple_triple_digit_modifiers[exp_num / 100 % quadruple_triple_digit_modifiers.len]});
-        filled += try strConcatFormat(result, filled, "{s}", .{quadruple_double_digit_modifiers[exp_num / 10 % quadruple_double_digit_modifiers.len]});
-        filled += try strConcatFormat(result, filled, "{s}", .{quadruple_single_digit_modifiers[exp_num % 10]});
-        if (filled >= 5) {
-            if (std.mem.startsWith(u8, result[filled-5..], "milli"[0..])) {
-                filled += try strConcatFormat(result, filled, "{s}", .{"n"});
-            }
+        filled += strConcatLowOverhead(result, filled, quadruple_digit_powers[exp_num / 1000 % quadruple_digit_powers.len]);
+        filled += strConcatLowOverhead(result, filled, quadruple_triple_digit_modifiers[exp_num / 100 % quadruple_triple_digit_modifiers.len]);
+        filled += strConcatLowOverhead(result, filled, quadruple_double_digit_modifiers[exp_num / 10 % quadruple_double_digit_modifiers.len]);
+        filled += strConcatLowOverhead(result, filled, quadruple_single_digit_modifiers[exp_num % 10]);
+        if (filled >= 5 and std.mem.startsWith(u8, result[filled-5..], "milli"[0..])) {
+            filled += strConcatLowOverhead(result, filled, "n");
         }
-        filled += try strConcatFormat(result, filled, "{s}", .{"illion"});
+        filled += strConcatLowOverhead(result, filled, "illion");
     } else if (exp_num >= 100) {
-        filled += try strConcatFormat(result, filled, "{s}", .{triple_single_digit_modifiers[exp_num % 10]});
-        filled += try strConcatFormat(result, filled, "{s}", .{triple_double_digit_modifiers[exp_num / 10 % triple_double_digit_modifiers.len]});
-        filled += try strConcatFormat(result, filled, "{s}", .{triple_digit_powers[exp_num / 100 % triple_digit_powers.len]});
+        filled += strConcatLowOverhead(result, filled, triple_single_digit_modifiers[exp_num % 10]);
+        filled += strConcatLowOverhead(result, filled, triple_double_digit_modifiers[exp_num / 10 % triple_double_digit_modifiers.len]);
+        filled += strConcatLowOverhead(result, filled, triple_digit_powers[exp_num / 100 % triple_digit_powers.len]);
     } else if (exp_num >= 10) {
-        filled += try strConcatFormat(result, filled, "{s}{s}", .{double_digit_modifiers[exp_num % double_digit_modifiers.len], double_digit_powers[exp_num / 10 % double_digit_powers.len]});
+        filled += strConcatLowOverhead(result, filled, double_digit_modifiers[exp_num % double_digit_modifiers.len]);
+        filled += strConcatLowOverhead(result, filled, double_digit_powers[exp_num / 10 % double_digit_powers.len]);
     } else {
-        filled += try strConcatFormat(result, filled, "{s}", .{single_digit_powers[exp_num % single_digit_powers.len]});
+        filled += strConcatLowOverhead(result, filled, single_digit_powers[exp_num % single_digit_powers.len]);
     }
-    result = try allocator.realloc(result, filled);
-    return result;
+    return filled;
 }
 
 pub fn reverseArrayList(list: *std.ArrayList(u10)) !void {
@@ -180,60 +198,45 @@ pub fn reverseArrayList(list: *std.ArrayList(u10)) !void {
 }
 
 pub fn printOutNum(num : std.math.big.int.Managed) ![]u8 {
-    var thousands_list : std.ArrayList(u10) = undefined;
     var result : []u8 = undefined;
-    var res : std.math.big.int.Managed = try num.clone();
+    var quotient : std.math.big.int.Managed = try num.clone();
+    var remainder = try std.math.big.int.Managed.init(allocator);
     var thousand_managed = try std.math.big.int.Managed.initSet(allocator, 1000);
-    // const num_str = try num.toString(allocator, 10, std.fmt.Case.lower);
-    const num_bits = @as(f128, @floatFromInt(num.bitCountAbs()));
-    const num_len = @as(usize, @intFromFloat(@floor(std.math.log10(2.0) * num_bits)));
+    const num_len = bigIntDigitLength(num);
+    const thousands_arr_len = num_len / 3;
+    var thousands_arr = try allocator.alloc(u10, thousands_arr_len);
     if (num.eqlZero() == true) {
         result = try allocator.alloc(u8, bases[0].len);
         @memcpy(result[0..bases[0].len], bases[0]);
         return result;
     } else {
-        thousands_list = try std.ArrayList(u10).initCapacity(allocator, num_len / 3 + 1);
-        result = try allocator.alloc(u8, thousands_list.capacity * (max_word_size + 2));
+        result = try allocator.alloc(u8, thousands_arr_len * (max_word_size + 2));
         @memset(result, 0);
     }
-    var dummy_remainder = try std.math.big.int.Managed.init(allocator);
-    while (res.eqlZero() == false) : (try res.divFloor(&dummy_remainder, &res, &thousand_managed)) {
-        var quotient = try std.math.big.int.Managed.init(allocator);
-        var remainder = try std.math.big.int.Managed.init(allocator);
-        defer quotient.deinit();
-        defer remainder.deinit();
-        try std.math.big.int.Managed.divFloor(&quotient, &remainder, &res, &thousand_managed);
-        const printVal = try remainder.toInt(u10);
-        try thousands_list.append(allocator, printVal);
+    var i : usize = 0;
+    while (quotient.eqlZero() == false) : (i += 1) {
+        try std.math.big.int.Managed.divFloor(&quotient, &remainder, &quotient, &thousand_managed);
+        const printVal = @as(u10, @truncate(remainder.limbs[0] % 1000));
+        thousands_arr[i] = printVal;
     }
     var filled : usize = 0;
-    const items = thousands_list.items;
-    var item_index = items.len - 1;
+    var item_index = thousands_arr_len - 1;
     while (item_index >= 0) : (item_index -= 1) {
-        const item = items[item_index];
+        const item = thousands_arr[item_index];
         if (item == 0) continue;
-        const currentWord = try wordFromPower(@as(u64, @truncate(item_index * 3)));
-        defer allocator.free(currentWord);
         filled += try injectUnderThousandNum(result[0..], filled, item);
-        filled += try strConcatFormat(result, filled, "{s}", .{currentWord});
+        filled += try wordFromPower(@as(u64, @truncate(item_index * 3)), result[filled..filled+max_word_size]);
         if (item_index != 0) {
-            filled += try strConcatFormat(result, filled, "{s}", .{", "});
+            filled += strConcatLowOverhead(result, filled, ", ");
         } else {
             break;
         }
     }
-    var result_size : usize = undefined;
-    for (result, 0..) |char, i| {
-        if (char == 0) {
-            result_size = i;
-            break;
-        }
-    }
-    result = try allocator.realloc(result, result_size);
+    result = try allocator.realloc(result, filled);
     defer {
-        res.deinit();
-        thousands_list.deinit(allocator);
-        dummy_remainder.deinit();
+        allocator.free(thousands_arr);
+        quotient.deinit();
+        remainder.deinit();
         thousand_managed.deinit();
     }
     return result;
@@ -242,15 +245,17 @@ pub fn printOutNum(num : std.math.big.int.Managed) ![]u8 {
 pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
     const cwd = std.fs.cwd();
-    const file = try cwd.readFileAlloc(allocator, "./bignumber.txt", std.math.maxInt(usize));
+    // const file = try cwd.readFileAlloc(allocator, "./smallnumber.txt", std.math.maxInt(usize));
+    // const file = try cwd.readFileAlloc(allocator, "./bignumber.txt", std.math.maxInt(usize));
+    const file = try cwd.readFileAlloc(allocator, "./mediumnumber.txt", std.math.maxInt(usize));
     var my_num = try std.math.big.int.Managed.init(allocator);
     try my_num.setString(10, file);
     const buf = printOutNum(my_num) catch {
         std.debug.print("Number is too big!\n", .{});
         return;
     };
-    const num_bits = @as(f128, @floatFromInt(my_num.bitCountAbs()));
-    const num_len = @as(usize, @intFromFloat(@floor(std.math.log10(2.0) * num_bits)));
+    const num_bits = my_num.bitCountAbs();
+    const num_len = bigIntDigitLength(my_num);
     const highest_power = num_len - 1;
     const highest_word_power = highest_power - (highest_power % 3);
     const highest_cardinal = (highest_word_power - 3) / 3;
