@@ -102,8 +102,7 @@ pub fn thousandGroupings(num: anytype) @TypeOf(num) {
 
 pub fn wordFromPower(num: u64) ![]u8 {
     if (num < 3) {
-        const result = try allocator.alloc(u8, 0);
-        return result;
+        return try allocator.alloc(u8, 0);
     }
     const exp_num = num / 3 - 1;
     var result = try allocator.alloc(u8, max_word_size);
@@ -185,15 +184,16 @@ pub fn printOutNum(num : std.math.big.int.Managed) ![]u8 {
     var result : []u8 = undefined;
     var res : std.math.big.int.Managed = try num.clone();
     var thousand_managed = try std.math.big.int.Managed.initSet(allocator, 1000);
-    const num_str = try num.toString(allocator, 10, std.fmt.Case.lower);
-    const num_len = num_str.len;
+    // const num_str = try num.toString(allocator, 10, std.fmt.Case.lower);
+    const num_bits = @as(f128, @floatFromInt(num.bitCountAbs()));
+    const num_len = @as(usize, @intFromFloat(@floor(std.math.log10(2.0) * num_bits)));
     if (num.eqlZero() == true) {
         result = try allocator.alloc(u8, bases[0].len);
         @memcpy(result[0..bases[0].len], bases[0]);
         return result;
     } else {
         thousands_list = try std.ArrayList(u10).initCapacity(allocator, num_len / 3 + 1);
-        result = try allocator.alloc(u8, thousands_list.capacity * max_word_size);
+        result = try allocator.alloc(u8, thousands_list.capacity * (max_word_size + 2));
         @memset(result, 0);
     }
     var dummy_remainder = try std.math.big.int.Managed.init(allocator);
@@ -232,7 +232,6 @@ pub fn printOutNum(num : std.math.big.int.Managed) ![]u8 {
     result = try allocator.realloc(result, result_size);
     defer {
         res.deinit();
-        allocator.free(num_str);
         thousands_list.deinit(allocator);
         dummy_remainder.deinit();
         thousand_managed.deinit();
@@ -250,12 +249,12 @@ pub fn main() !void {
         std.debug.print("Number is too big!\n", .{});
         return;
     };
-    const my_num_str = try my_num.toString(allocator, 10, std.fmt.Case.lower);
-    const highest_power = my_num_str.len - 1;
-    const roughly_needed_bits = std.math.ceil(@as(f64, @floatFromInt(highest_power + 1)) * std.math.log2(@as(f64, 10.0))) + 1;
+    const num_bits = @as(f128, @floatFromInt(my_num.bitCountAbs()));
+    const num_len = @as(usize, @intFromFloat(@floor(std.math.log10(2.0) * num_bits)));
+    const highest_power = num_len - 1;
     const highest_word_power = highest_power - (highest_power % 3);
     const highest_cardinal = (highest_word_power - 3) / 3;
-    std.debug.print("Value of item is 10^{d} and needs roughly {d} bits to represent (largest number word is 10^{d} or the cardinal sequence {d})\n", .{highest_power, roughly_needed_bits, highest_word_power, highest_cardinal});
+    std.debug.print("Value of item is 10^{d} and needs roughly {d} bits to represent (largest number word is 10^{d} or the cardinal sequence {d})\n", .{highest_power, num_bits, highest_word_power, highest_cardinal});
     std.debug.print("{s}\n", .{buf});
     // Add testing here if needed.
     // const buf = try wordFromPower(198473298471);
@@ -265,7 +264,6 @@ pub fn main() !void {
         std.process.argsFree(allocator, args);
         allocator.free(file);
         allocator.free(buf);
-        allocator.free(my_num_str);
         const leaky = gpa.deinit();
         if (leaky == std.heap.Check.leak) {
             std.debug.print("AAAA leak\n", .{});
