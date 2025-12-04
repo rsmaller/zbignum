@@ -201,9 +201,10 @@ pub fn printOutNum(num : std.math.big.int.Managed) ![]u8 {
     var result : []u8 = undefined;
     var quotient : std.math.big.int.Managed = try num.clone();
     var remainder = try std.math.big.int.Managed.init(allocator);
+    try remainder.ensureCapacity(1);
     var thousand_managed = try std.math.big.int.Managed.initSet(allocator, 1000);
     const num_len = bigIntDigitLength(num);
-    const thousands_arr_len = num_len / 3;
+    const thousands_arr_len = (num_len + 2) / 3;
     var thousands_arr = try allocator.alloc(u10, thousands_arr_len);
     if (num.eqlZero() == true) {
         result = try allocator.alloc(u8, bases[0].len);
@@ -211,14 +212,17 @@ pub fn printOutNum(num : std.math.big.int.Managed) ![]u8 {
         return result;
     } else {
         result = try allocator.alloc(u8, thousands_arr_len * (max_word_size + 2));
-        @memset(result, 0);
     }
     var i : usize = 0;
-    while (quotient.eqlZero() == false) : (i += 1) {
-        try std.math.big.int.Managed.divFloor(&quotient, &remainder, &quotient, &thousand_managed);
-        const printVal = @as(u10, @truncate(remainder.limbs[0] % 1000));
+    var timer = try std.time.Timer.start();
+    const start = timer.read();
+    while (i < thousands_arr_len) : (i += 1) {
+        try std.math.big.int.Managed.divTrunc(&quotient, &remainder, &quotient, &thousand_managed);
+        const printVal = @as(u10, @truncate(remainder.limbs[0]));
         thousands_arr[i] = printVal;
     }
+    const end = timer.read();
+    std.debug.print("This loop took {d} seconds\n", .{secondsFromNanoseconds(end - start)});
     var filled : usize = 0;
     var item_index = thousands_arr_len - 1;
     while (item_index >= 0) : (item_index -= 1) {
@@ -242,6 +246,10 @@ pub fn printOutNum(num : std.math.big.int.Managed) ![]u8 {
     return result;
 }
 
+pub fn secondsFromNanoseconds(nanoseconds: u64) f64 {
+    return @as(f64, @floatFromInt(nanoseconds)) / 1000000000.0;
+}
+
 pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
     const cwd = std.fs.cwd();
@@ -250,16 +258,19 @@ pub fn main() !void {
     const file = try cwd.readFileAlloc(allocator, "./mediumnumber.txt", std.math.maxInt(usize));
     var my_num = try std.math.big.int.Managed.init(allocator);
     try my_num.setString(10, file);
+    var timer = try std.time.Timer.start();
+    const start = timer.read();
     const buf = printOutNum(my_num) catch {
         std.debug.print("Number is too big!\n", .{});
         return;
     };
+    const end = timer.read();
     const num_bits = my_num.bitCountAbs();
     const num_len = bigIntDigitLength(my_num);
     const highest_power = num_len - 1;
     const highest_word_power = highest_power - (highest_power % 3);
     const highest_cardinal = (highest_word_power - 3) / 3;
-    std.debug.print("Value of item is 10^{d} and needs roughly {d} bits to represent (largest number word is 10^{d} or the cardinal sequence {d})\n", .{highest_power, num_bits, highest_word_power, highest_cardinal});
+    std.debug.print("(Took {d} seconds to run) Value of item is 10^{d} and needs roughly {d} bits to represent (largest number word is 10^{d} or the cardinal sequence {d})\n", .{secondsFromNanoseconds(end - start), highest_power, num_bits, highest_word_power, highest_cardinal});
     std.debug.print("{s}\n", .{buf});
     // Add testing here if needed.
     // const buf = try wordFromPower(198473298471);
