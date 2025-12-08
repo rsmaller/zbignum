@@ -3,6 +3,7 @@ const smallnum = @import("smallnum");
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
 const arena_allocator = std.heap.ArenaAllocator.init(allocator);
+var word_from_power_thousands_arr : ?[]u10 = null;
 
 const bases = [_][]const u8 {
     "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
@@ -178,20 +179,33 @@ pub fn wordFromPower(num: u64, result: []u8) !usize {
     if (exp_num >= 100000) {
         var exp_calc = exp_num;
         var thousands_index = thousandGroupings(exp_num) - 1;
-        var thousands_arr = try allocator.alloc(u10, thousands_index + 1);
-        defer allocator.free(thousands_arr);
+        var word_from_power_thousands_arr_unbound : []u10 = undefined;
+        if (word_from_power_thousands_arr) |word_from_power_thousands_arr_binding| {
+            if (word_from_power_thousands_arr_unbound.len < thousands_index + 1) {
+                word_from_power_thousands_arr = try allocator.realloc(word_from_power_thousands_arr_binding, thousands_index + 1);
+            }
+            if (word_from_power_thousands_arr) |arr_assign_val| {
+                word_from_power_thousands_arr_unbound = arr_assign_val;
+            }
+        } else {
+            word_from_power_thousands_arr = try allocator.alloc(u10, thousands_index + 1);
+            if (word_from_power_thousands_arr) |arr_assign_val| {
+                word_from_power_thousands_arr_unbound = arr_assign_val;
+            }
+        }
+
         while (thousands_index >= 0) : (thousands_index -= 1) {
             const current = @as(u10, @truncate(exp_calc % 1000));
             exp_calc /= 1000;
-            thousands_arr[thousands_index] = current;
+            word_from_power_thousands_arr_unbound[thousands_index] = current;
             if (thousands_index == 0) break;
         }
-        for (thousands_arr, 0..) |item, milli_count_subtractor| {
+        for (word_from_power_thousands_arr_unbound, 0..) |item, milli_count_subtractor| {
             filled += strConcatLowOverhead(result, filled, quadruple_triple_digit_modifiers[item / 100 % 10]);
             filled += strConcatLowOverhead(result, filled, triple_double_digit_modifiers[item / 10 % 10]);
             filled += strConcatLowOverhead(result, filled, triple_single_digit_modifiers[item % 10]);
             if (item != 0) {
-                const milli_count = thousands_arr.len - milli_count_subtractor - 1;
+                const milli_count = word_from_power_thousands_arr_unbound.len - milli_count_subtractor - 1;
                 for (0..milli_count) |_| {
                     filled += strConcatLowOverhead(result, filled, "milli");
                 }
@@ -266,22 +280,18 @@ pub fn printOutNum(num : []const u8) ![]u8 {
     const thousands_arr_len = (num_len + 2) / 3;
     var thousands_arr = try allocator.alloc(u10, thousands_arr_len);
     var i : usize = 0;
-    var timer = try std.time.Timer.start();
-    const start = timer.read();
+    // var timer = try std.time.Timer.start();
     var current_slice_len : usize = undefined;
     var string_is_zero : bool = true;
-    // std.debug.print("Thousands arr len is {d} and string len is {d}\n", .{thousands_arr_len, num_len});
     var loop_counter : usize = 0;
     while (loop_counter < thousands_arr_len) : (loop_counter += 1) {
         current_slice_len = 3;
         if (i == 0 and num_len % 3 != 0) {
-            // std.debug.print("I set to something diff\n", .{});
             current_slice_len = num_len % 3;
         }
         const current_slice = num[i..i+current_slice_len];
         const current_thousand = try threeDigitStrToSmallInt(current_slice);
         thousands_arr[loop_counter] = current_thousand;
-        // std.debug.print("Current thousand: {d} with slice len {d}\n", .{current_thousand, current_slice_len});
         string_is_zero = string_is_zero and (current_thousand == 0);
         i += current_slice_len;
     }
@@ -292,8 +302,6 @@ pub fn printOutNum(num : []const u8) ![]u8 {
     } else {
         result = try allocator.alloc(u8, thousands_arr_len * (max_word_size + 2));
     }
-    const end = timer.read();
-    std.debug.print("This loop took {d} seconds\n", .{secondsFromNanoseconds(end - start)});
     var filled : usize = 0;
     var item_index : usize = 0;
     while (item_index < thousands_arr_len) : (item_index += 1) {
@@ -321,32 +329,28 @@ pub fn secondsFromNanoseconds(nanoseconds: u64) f64 {
 pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
     const cwd = std.fs.cwd();
+    // const file = try cwd.readFileAlloc(allocator, "./zero.txt", std.math.maxInt(usize));
     // const file = try cwd.readFileAlloc(allocator, "./smallnumber.txt", std.math.maxInt(usize));
-    const file = try cwd.readFileAlloc(allocator, "./bignumber.txt", std.math.maxInt(usize));
     // const file = try cwd.readFileAlloc(allocator, "./mediumnumber.txt", std.math.maxInt(usize));
-    // var my_num = try std.math.big.int.Managed.init(allocator);
-    // try my_num.setString(10, file);
+    const file = try cwd.readFileAlloc(allocator, "./bignumber.txt", std.math.maxInt(usize));
     var timer = try std.time.Timer.start();
     const start = timer.read();
-    const buf = printOutNum(file) catch {
-        std.debug.print("Number is too big!\n", .{});
-        return;
-    };
+    const buf = try printOutNum(file);
     const end = timer.read();
     const num_bits = 0;
     const num_len = file.len;
     const highest_power = num_len - 1;
     const highest_word_power = highest_power - (highest_power % 3);
-    const highest_cardinal = (highest_word_power - 3) / 3;
-    std.debug.print("(Took {d} seconds to run) Value of item is 10^{d} and needs roughly {d} bits to represent (largest number word is 10^{d} or the cardinal sequence {d})\n", .{secondsFromNanoseconds(end - start), highest_power, num_bits, highest_word_power, highest_cardinal});
+    const highest_cardinal = if (highest_word_power >= 3) (highest_word_power - 3) / 3 else 0;
+    std.debug.print("Value of item is 10^{d} and needs roughly {d} bits to represent (largest number word is 10^{d} or the cardinal sequence {d}, generated in {d} seconds)\n", .{highest_power, num_bits, highest_word_power, highest_cardinal, secondsFromNanoseconds(end - start)});
     std.debug.print("{s}\n", .{buf});
-    // Add testing here if needed.
-    // const buf = try wordFromPower(198473298471);
-    // std.debug.print("{d} : {s}\n", .{198473298471, buf});
     defer {
         std.process.argsFree(allocator, args);
         allocator.free(file);
         allocator.free(buf);
+        if (word_from_power_thousands_arr) |unwrap| {
+            allocator.free(unwrap);
+        }
         const leaky = gpa.deinit();
         if (leaky == std.heap.Check.leak) {
             std.debug.print("AAAA leak\n", .{});
