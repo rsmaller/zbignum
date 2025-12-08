@@ -201,9 +201,11 @@ pub fn wordFromPower(num: u64, result: []u8) !usize {
             if (thousands_index == 0) break;
         }
         for (word_from_power_thousands_arr_unbound, 0..) |item, milli_count_subtractor| {
-            filled += strConcatLowOverhead(result, filled, quadruple_triple_digit_modifiers[item / 100 % 10]);
-            filled += strConcatLowOverhead(result, filled, triple_double_digit_modifiers[item / 10 % 10]);
-            filled += strConcatLowOverhead(result, filled, triple_single_digit_modifiers[item % 10]);
+            if (!(item == 1 and milli_count_subtractor == 0)) {
+                filled += strConcatLowOverhead(result, filled, quadruple_triple_digit_modifiers[item / 100 % 10]);
+                filled += strConcatLowOverhead(result, filled, triple_double_digit_modifiers[item / 10 % 10]);
+                filled += strConcatLowOverhead(result, filled, triple_single_digit_modifiers[item % 10]);
+            }
             if (item != 0) {
                 const milli_count = word_from_power_thousands_arr_unbound.len - milli_count_subtractor - 1;
                 for (0..milli_count) |_| {
