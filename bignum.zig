@@ -82,7 +82,7 @@ pub inline fn thousandGroupings(num: anytype) @TypeOf(num) {
     return @as(@TypeOf(num), @intFromFloat(std.math.ceil(std.math.log10(@as(f128, @floatFromInt(num)))))) / 3 + 1;
 }
 
-pub fn wordFromPower(num: u64, result: []u8) !usize {
+pub fn wordFromPower(num: usize, result: []u8) !usize {
     if (num < 3) {
         return 0;
     }
@@ -239,6 +239,8 @@ pub fn main() !void {
     var timer = try std.time.Timer.start();
     const start = timer.read();
     const buf = try printOutNum(file);
+    // var buf = try allocator.alloc(u8, max_word_size);
+    // buf = try allocator.realloc(buf, try wordFromPower(9349587398774957, buf));
     const end = timer.read();
     const num_len = file.len;
     const num_bits = std.math.ceil(std.math.log2(10.0) * @as(f64, @floatFromInt(num_len)));
