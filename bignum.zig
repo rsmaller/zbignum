@@ -46,12 +46,10 @@ const quintuple_triple_digit_modifiers = [_][]const u8 {"", "centi", "ducenti", 
 const quintuple_double_digit_modifiers = [_][]const u8 {"", "deci", "viginti", "triginta", "quadraginta", "quinquaginta", "sexaginta", "septuaginta", "octoginta", "nonaginta"};
 const quintuple_single_digit_modifiers = [_][]const u8 {"", "un", "duo", "tres", "quattuor", "quin", "sex", "septen", "octo", "novem"};
 
-const SizeError = error {
+const BigNumError = error {
     SizeError,
-};
-
-const BufferFullError = error {
     BufferFullError,
+    ArgLengthError,
 };
 
 pub fn bigIntDigitLength(num: std.math.big.int.Managed) usize {
@@ -331,10 +329,10 @@ pub fn secondsFromNanoseconds(nanoseconds: u64) f64 {
 pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
     const cwd = std.fs.cwd();
-    // const file = try cwd.readFileAlloc(allocator, "./zero.txt", std.math.maxInt(usize));
-    // const file = try cwd.readFileAlloc(allocator, "./smallnumber.txt", std.math.maxInt(usize));
-    // const file = try cwd.readFileAlloc(allocator, "./mediumnumber.txt", std.math.maxInt(usize));
-    const file = try cwd.readFileAlloc(allocator, "./bignumber.txt", std.math.maxInt(usize));
+    if (args.len < 2) {
+        return error.ArgLengthError;
+    }
+    const file = try cwd.readFileAlloc(allocator, args[1], std.math.maxInt(usize));
     var timer = try std.time.Timer.start();
     const start = timer.read();
     const buf = try printOutNum(file);
