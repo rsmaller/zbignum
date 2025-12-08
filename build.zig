@@ -6,7 +6,7 @@ pub fn build(b: *std.Build) void {
         .root_module = b.createModule(.{
             .root_source_file = b.path("bignum.zig"),
             .target = b.graph.host,
-            .optimize = .ReleaseFast,
+            .optimize = .Debug,
         }),
     });
     b.installArtifact(exe);

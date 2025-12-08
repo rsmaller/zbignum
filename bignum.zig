@@ -1,5 +1,5 @@
 const std = @import("std"); // works with version 0.15.1+
-const smallnum = @import("smallnum");
+const strutils = @import("strutils.zig");
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
 const arena_allocator = std.heap.ArenaAllocator.init(allocator);
@@ -50,121 +50,35 @@ const BigNumError = error {
     SizeError,
     BufferFullError,
     ArgLengthError,
+    MemoryLeakError,
 };
 
-pub fn bigIntDigitLength(num: std.math.big.int.Managed) usize {
-    const num_bits = @as(f64, @floatFromInt(num.bitCountAbs()));
-    return @as(usize, @intFromFloat(@floor(std.math.log10(2.0) * num_bits)));
-}
-
-pub fn maxIn2DCharArr(comptime arr: anytype) usize {
-    var result : usize = 0;
-    for (arr) |item| {
-        if (item.len > result) {
-            result = item.len;
-        }
-    }
-    return result;
-}
-
 const max_word_size : usize = 2048;
-
-// pub fn printOutNum(num : std.math.big.int.Managed) ![]u8 {
-//     var result : []u8 = undefined;
-//     var quotient : std.math.big.int.Managed = try num.clone();
-//     var remainder = try std.math.big.int.Managed.init(allocator);
-//     try remainder.ensureCapacity(1);
-//     var thousand_managed = try std.math.big.int.Managed.initSet(allocator, 1000);
-//     const num_len = bigIntDigitLength(num);
-//     const thousands_arr_len = (num_len + 2) / 3;
-//     var thousands_arr = try allocator.alloc(u10, thousands_arr_len);
-//     if (num.eqlZero() == true) {
-//         result = try allocator.alloc(u8, bases[0].len);
-//         @memcpy(result[0..bases[0].len], bases[0]);
-//         return result;
-//     } else {
-//         result = try allocator.alloc(u8, thousands_arr_len * (max_word_size + 2));
-//     }
-//     var i : usize = 0;
-//     var timer = try std.time.Timer.start();
-//     const start = timer.read();
-//     while (i < thousands_arr_len) : (i += 1) {
-//         try std.math.big.int.Managed.divTrunc(&quotient, &remainder, &quotient, &thousand_managed);
-//         thousands_arr[i] = @as(u10, @truncate(remainder.limbs[0]));
-//     }
-//     const end = timer.read();
-//     std.debug.print("This loop took {d} seconds\n", .{secondsFromNanoseconds(end - start)});
-//     var filled : usize = 0;
-//     var item_index = thousands_arr_len - 1;
-//     while (item_index >= 0) : (item_index -= 1) {
-//         const item = thousands_arr[item_index];
-//         if (item == 0) continue;
-//         filled += try injectUnderThousandNum(result[0..], filled, item);
-//         filled += try wordFromPower(@as(u64, @truncate(item_index * 3)), result[filled..filled+max_word_size]);
-//         if (item_index != 0) {
-//             filled += strConcatLowOverhead(result, filled, ", ");
-//         } else {
-//             break;
-//         }
-//     }
-//     result = try allocator.realloc(result, filled);
-//     defer {
-//         allocator.free(thousands_arr);
-//         quotient.deinit();
-//         remainder.deinit();
-//         thousand_managed.deinit();
-//     }
-//     return result;
-// }
-
-// pub fn strPushFormat(buffer: [] u8, filled: usize, comptime format: []const u8, items: anytype) !usize {
-//     const count = std.fmt.count(format, items);
-//     if (filled + count >= buffer.len) {
-//         return error.BufferFullError;
-//     }
-//     @memmove(buffer[count..], buffer[0..buffer.len-count]);
-//     _ = try std.fmt.bufPrint(buffer[0..count], format, items);
-//     return count;
-// }
-
-// pub fn strConcatFormat(buffer: []u8, filled: usize, comptime format : []const u8, items: anytype) !usize {
-//     const count = std.fmt.count(format, items);
-//     if (filled + count >= buffer.len) {
-//         return error.BufferFullError;
-//     }
-//     _ = try std.fmt.bufPrint(buffer[filled..filled+count], format, items);
-//     return count;
-// }
 
 pub fn injectUnderThousandNum(buffer: []u8, filled: usize, num: u10) !usize {
     var current_filled : usize = filled;
     if (num >= 100) {
         if (num % 100 != 0) {
-            current_filled += strConcatLowOverhead(buffer, current_filled, bases[num / 100]);
-            current_filled += strConcatLowOverhead(buffer, current_filled, " hundred ");
-            current_filled += strConcatLowOverhead(buffer, current_filled, bases[num % 100]);
-            current_filled += strConcatLowOverhead(buffer, current_filled, " ");
+            current_filled += strutils.strConcatLowOverhead(buffer, current_filled, bases[num / 100]);
+            current_filled += strutils.strConcatLowOverhead(buffer, current_filled, " hundred ");
+            current_filled += strutils.strConcatLowOverhead(buffer, current_filled, bases[num % 100]);
+            current_filled += strutils.strConcatLowOverhead(buffer, current_filled, " ");
             return current_filled - filled;
 
         } else {
-            current_filled += strConcatLowOverhead(buffer, current_filled, " ");
-            current_filled += strConcatLowOverhead(buffer, current_filled, bases[num % 100]);
-            current_filled += strConcatLowOverhead(buffer, current_filled, " ");
+            current_filled += strutils.strConcatLowOverhead(buffer, current_filled, " ");
+            current_filled += strutils.strConcatLowOverhead(buffer, current_filled, bases[num % 100]);
+            current_filled += strutils.strConcatLowOverhead(buffer, current_filled, " ");
             return current_filled - filled;
         }
     } else {
-        current_filled += strConcatLowOverhead(buffer, current_filled, bases[num]);
-        current_filled += strConcatLowOverhead(buffer, current_filled, " ");
+        current_filled += strutils.strConcatLowOverhead(buffer, current_filled, bases[num]);
+        current_filled += strutils.strConcatLowOverhead(buffer, current_filled, " ");
         return current_filled - filled;
     }
 }
 
-pub inline fn strConcatLowOverhead(buffer: []u8, filled : usize, item: []const u8) usize {
-    @memcpy(buffer[filled..filled+item.len], item);
-    return item.len;
-}
-
-pub fn thousandGroupings(num: anytype) @TypeOf(num) {
+pub inline fn thousandGroupings(num: anytype) @TypeOf(num) {
     return @as(@TypeOf(num), @intFromFloat(std.math.ceil(std.math.log10(@as(f128, @floatFromInt(num)))))) / 3 + 1;
 }
 
@@ -191,7 +105,6 @@ pub fn wordFromPower(num: u64, result: []u8) !usize {
                 word_from_power_thousands_arr_unbound = arr_assign_val;
             }
         }
-
         while (thousands_index >= 0) : (thousands_index -= 1) {
             const current = @as(u10, @truncate(exp_calc % 1000));
             exp_calc /= 1000;
@@ -200,63 +113,55 @@ pub fn wordFromPower(num: u64, result: []u8) !usize {
         }
         for (word_from_power_thousands_arr_unbound, 0..) |item, milli_count_subtractor| {
             if (!(item == 1 and milli_count_subtractor == 0)) {
-                filled += strConcatLowOverhead(result, filled, quadruple_triple_digit_modifiers[item / 100 % 10]);
-                filled += strConcatLowOverhead(result, filled, triple_double_digit_modifiers[item / 10 % 10]);
-                filled += strConcatLowOverhead(result, filled, triple_single_digit_modifiers[item % 10]);
+                filled += strutils.strConcatLowOverhead(result, filled, quadruple_triple_digit_modifiers[item / 100 % 10]);
+                filled += strutils.strConcatLowOverhead(result, filled, triple_double_digit_modifiers[item / 10 % 10]);
+                filled += strutils.strConcatLowOverhead(result, filled, triple_single_digit_modifiers[item % 10]);
             }
             if (item != 0) {
                 const milli_count = word_from_power_thousands_arr_unbound.len - milli_count_subtractor - 1;
                 for (0..milli_count) |_| {
-                    filled += strConcatLowOverhead(result, filled, "milli");
+                    filled += strutils.strConcatLowOverhead(result, filled, "milli");
                 }
             }
         }
         if (filled >= 5 and std.mem.startsWith(u8, result[filled-5..], "milli"[0..])) {
-            filled += strConcatLowOverhead(result, filled, "n");
+            filled += strutils.strConcatLowOverhead(result, filled, "n");
         }
-        filled += strConcatLowOverhead(result, filled, "illion");
+        filled += strutils.strConcatLowOverhead(result, filled, "illion");
     } else if (exp_num >= 10000) {
-        filled += strConcatLowOverhead(result, filled, quintuple_digit_modifiers[exp_num / 1000 % quintuple_digit_powers.len]);
-        filled += strConcatLowOverhead(result, filled, quintuple_digit_powers[exp_num / 10000 % quintuple_digit_powers.len]);
-        filled += strConcatLowOverhead(result, filled, "milli");
-        filled += strConcatLowOverhead(result, filled, quintuple_triple_digit_modifiers[exp_num / 100 % quintuple_triple_digit_modifiers.len]);
-        filled += strConcatLowOverhead(result, filled, quintuple_double_digit_modifiers[exp_num / 10 % quintuple_double_digit_modifiers.len]);
-        filled += strConcatLowOverhead(result, filled, quintuple_single_digit_modifiers[exp_num % 10]);
+        filled += strutils.strConcatLowOverhead(result, filled, quintuple_digit_modifiers[exp_num / 1000 % quintuple_digit_powers.len]);
+        filled += strutils.strConcatLowOverhead(result, filled, quintuple_digit_powers[exp_num / 10000 % quintuple_digit_powers.len]);
+        filled += strutils.strConcatLowOverhead(result, filled, "milli");
+        filled += strutils.strConcatLowOverhead(result, filled, quintuple_triple_digit_modifiers[exp_num / 100 % quintuple_triple_digit_modifiers.len]);
+        filled += strutils.strConcatLowOverhead(result, filled, quintuple_double_digit_modifiers[exp_num / 10 % quintuple_double_digit_modifiers.len]);
+        filled += strutils.strConcatLowOverhead(result, filled, quintuple_single_digit_modifiers[exp_num % 10]);
         if (filled >= 5 and std.mem.startsWith(u8, result[filled-5..], "milli"[0..])) {
-            filled += strConcatLowOverhead(result, filled, "n");
+            filled += strutils.strConcatLowOverhead(result, filled, "n");
         }
-        filled += strConcatLowOverhead(result, filled, "illion");
+        filled += strutils.strConcatLowOverhead(result, filled, "illion");
     } else if (exp_num >= 1000) {
-        filled += strConcatLowOverhead(result, filled, quadruple_digit_powers[exp_num / 1000 % quadruple_digit_powers.len]);
-        filled += strConcatLowOverhead(result, filled, quadruple_triple_digit_modifiers[exp_num / 100 % quadruple_triple_digit_modifiers.len]);
-        filled += strConcatLowOverhead(result, filled, quadruple_double_digit_modifiers[exp_num / 10 % quadruple_double_digit_modifiers.len]);
-        filled += strConcatLowOverhead(result, filled, quadruple_single_digit_modifiers[exp_num % 10]);
+        filled += strutils.strConcatLowOverhead(result, filled, quadruple_digit_powers[exp_num / 1000 % quadruple_digit_powers.len]);
+        filled += strutils.strConcatLowOverhead(result, filled, quadruple_triple_digit_modifiers[exp_num / 100 % quadruple_triple_digit_modifiers.len]);
+        filled += strutils.strConcatLowOverhead(result, filled, quadruple_double_digit_modifiers[exp_num / 10 % quadruple_double_digit_modifiers.len]);
+        filled += strutils.strConcatLowOverhead(result, filled, quadruple_single_digit_modifiers[exp_num % 10]);
         if (filled >= 5 and std.mem.startsWith(u8, result[filled-5..], "milli"[0..])) {
-            filled += strConcatLowOverhead(result, filled, "n");
+            filled += strutils.strConcatLowOverhead(result, filled, "n");
         }
-        filled += strConcatLowOverhead(result, filled, "illion");
+        filled += strutils.strConcatLowOverhead(result, filled, "illion");
     } else if (exp_num >= 100) {
-        filled += strConcatLowOverhead(result, filled, triple_single_digit_modifiers[exp_num % 10]);
-        filled += strConcatLowOverhead(result, filled, triple_double_digit_modifiers[exp_num / 10 % triple_double_digit_modifiers.len]);
-        filled += strConcatLowOverhead(result, filled, triple_digit_powers[exp_num / 100 % triple_digit_powers.len]);
+        filled += strutils.strConcatLowOverhead(result, filled, triple_single_digit_modifiers[exp_num % 10]);
+        filled += strutils.strConcatLowOverhead(result, filled, triple_double_digit_modifiers[exp_num / 10 % triple_double_digit_modifiers.len]);
+        filled += strutils.strConcatLowOverhead(result, filled, triple_digit_powers[exp_num / 100 % triple_digit_powers.len]);
     } else if (exp_num >= 10) {
-        filled += strConcatLowOverhead(result, filled, double_digit_modifiers[exp_num % double_digit_modifiers.len]);
-        filled += strConcatLowOverhead(result, filled, double_digit_powers[exp_num / 10 % double_digit_powers.len]);
+        filled += strutils.strConcatLowOverhead(result, filled, double_digit_modifiers[exp_num % double_digit_modifiers.len]);
+        filled += strutils.strConcatLowOverhead(result, filled, double_digit_powers[exp_num / 10 % double_digit_powers.len]);
     } else {
-        filled += strConcatLowOverhead(result, filled, single_digit_powers[exp_num % single_digit_powers.len]);
+        filled += strutils.strConcatLowOverhead(result, filled, single_digit_powers[exp_num % single_digit_powers.len]);
     }
     return filled;
 }
 
-pub fn reverseArrayList(list: *std.ArrayList(u10)) !void {
-    for (0..list.items.len / 2) |i| {
-        const swap = list.items[i];
-        list.items[i] = list.items[list.items.len - i - 1];
-        list.items[list.items.len - i - 1] = swap;
-    }
-}
-
-pub fn threeDigitStrToSmallInt(num : []const u8) !u10 {
+pub inline fn threeDigitStrToSmallInt(num : []const u8) !u10 {
     switch(num.len) {
         0 => {
             return error.SizeError;
@@ -271,7 +176,6 @@ pub fn threeDigitStrToSmallInt(num : []const u8) !u10 {
             return (@as(u10, num[0]) - '0') * 100 + (@as(u10, num[1]) - '0') * 10 + (@as(u10, num[2]) - '0');
         }
     }
-
 }
 
 pub fn printOutNum(num : []const u8) ![]u8 {
@@ -280,7 +184,6 @@ pub fn printOutNum(num : []const u8) ![]u8 {
     const thousands_arr_len = (num_len + 2) / 3;
     var thousands_arr = try allocator.alloc(u10, thousands_arr_len);
     var i : usize = 0;
-    // var timer = try std.time.Timer.start();
     var current_slice_len : usize = undefined;
     var string_is_zero : bool = true;
     var loop_counter : usize = 0;
@@ -310,7 +213,7 @@ pub fn printOutNum(num : []const u8) ![]u8 {
         filled += try injectUnderThousandNum(result[0..], filled, item);
         filled += try wordFromPower(@as(u64, @truncate((thousands_arr_len - item_index - 1) * 3)), result[filled..filled+max_word_size]);
         if (item_index != thousands_arr_len - 1) {
-            filled += strConcatLowOverhead(result, filled, ", ");
+            filled += strutils.strConcatLowOverhead(result, filled, ", ");
         } else {
             break;
         }
@@ -322,7 +225,7 @@ pub fn printOutNum(num : []const u8) ![]u8 {
     return result;
 }
 
-pub fn secondsFromNanoseconds(nanoseconds: u64) f64 {
+pub inline fn secondsFromNanoseconds(nanoseconds: u64) f64 {
     return @as(f64, @floatFromInt(nanoseconds)) / 1000000000.0;
 }
 
@@ -337,12 +240,12 @@ pub fn main() !void {
     const start = timer.read();
     const buf = try printOutNum(file);
     const end = timer.read();
-    const num_bits = 0;
     const num_len = file.len;
+    const num_bits = std.math.ceil(std.math.log2(10.0) * @as(f64, @floatFromInt(num_len)));
     const highest_power = num_len - 1;
     const highest_word_power = highest_power - (highest_power % 3);
     const highest_cardinal = if (highest_word_power >= 3) (highest_word_power - 3) / 3 else 0;
-    std.debug.print("Value of item is 10^{d} and needs roughly {d} bits to represent (largest number word is 10^{d} or the cardinal sequence {d}, generated in {d} seconds)\n", .{highest_power, num_bits, highest_word_power, highest_cardinal, secondsFromNanoseconds(end - start)});
+    std.debug.print("Value of item is 10^{d} and a number of this length needs roughly {d} bits to represent (largest number word is 10^{d} or the cardinal sequence {d}, generated in {d} seconds)\n", .{highest_power, num_bits, highest_word_power, highest_cardinal, secondsFromNanoseconds(end - start)});
     std.debug.print("{s}\n", .{buf});
     defer {
         std.process.argsFree(allocator, args);
