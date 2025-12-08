@@ -53,7 +53,7 @@ const BigNumError = error {
     MemoryLeakError,
 };
 
-const max_word_size : usize = 2048;
+const max_word_size : usize = 255;
 
 pub fn injectUnderThousandNum(buffer: []u8, filled: usize, num: u10) !usize {
     var current_filled : usize = filled;
@@ -240,7 +240,7 @@ pub fn main() !void {
     const start = timer.read();
     const buf = try printOutNum(file);
     // var buf = try allocator.alloc(u8, max_word_size);
-    // buf = try allocator.realloc(buf, try wordFromPower(9349587398774957, buf));
+    // buf = try allocator.realloc(buf, try wordFromPower(std.math.maxInt(usize), buf));
     const end = timer.read();
     const num_len = file.len;
     const num_bits = std.math.ceil(std.math.log2(10.0) * @as(f64, @floatFromInt(num_len)));
