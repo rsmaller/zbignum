@@ -3,6 +3,10 @@ const strutils = @import("strutils.zig");
 const page_allocator = std.heap.page_allocator;
 const c_allocator = std.heap.c_allocator;
 var word_from_power_thousands_arr : ?[]u10 = null;
+const io_bufsize = 1 << 21;
+var io_buf : [io_bufsize]u8 = .{0} ** io_bufsize;
+var writer = std.fs.File.stdout().writer(&io_buf);
+const stdout = &writer.interface;
 
 const bases = [_][]const u8 {
     "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
@@ -78,13 +82,17 @@ pub fn injectUnderThousandNum(buffer: []u8, filled: usize, num: u10) !usize {
 }
 
 pub inline fn thousandGroupings(num: anytype) @TypeOf(num) {
-    return @as(@TypeOf(num), @intFromFloat(std.math.ceil(std.math.log10(@as(f128, @floatFromInt(num)))))) / 3 + 1;
+    if (num == 0) return 1;
+    var divloop = num;
+    var res : @TypeOf(num) = 0;
+    while (divloop > 0) : (divloop /= 1000) {
+        res += 1;
+    }
+    return res;
 }
 
 pub fn wordFromPower(num: usize, result: []u8) !usize {
-    if (num < 3) {
-        return 0;
-    }
+    if (num < 3) return 0;
     const exp_num = num / 3 - 1;
     var filled : usize = 0;
     if (exp_num >= 100000) {
@@ -231,10 +239,6 @@ pub inline fn secondsFromNanoseconds(nanoseconds: u64) f64 {
 pub fn main() !void {
     const args = try std.process.argsAlloc(page_allocator);
     const cwd = std.fs.cwd();
-    const bufsize = 1 << 22;
-    var io_buf : [bufsize]u8 = .{0} ** bufsize;
-    var writer = std.fs.File.stdout().writer(&io_buf);
-    const stdout = &writer.interface;
     if (args.len < 2) {
         return error.ArgLengthError;
     }
@@ -259,4 +263,5 @@ pub fn main() !void {
     try stdout.print("Value of item is 10^{d} and a number of this length needs roughly {d} bits to represent (largest number word is 10^{d} or the cardinal sequence {d}, generated in {d} seconds)\n", .{highest_power, num_bits, highest_word_power, highest_cardinal, secondsFromNanoseconds(end - start)});
     try stdout.flush();
     try stdout.writeAll(buf);
+    try stdout.flush();
 }
