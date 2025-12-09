@@ -54,6 +54,7 @@ const BigNumError = error {
     BufferFullError,
     ArgLengthError,
     MemoryLeakError,
+    InvalidAllocationAccessError,
 };
 
 const max_word_size : usize = 255;
@@ -100,17 +101,9 @@ pub fn wordFromPower(num: usize, result: []u8) !usize {
         var thousands_index = thousandGroupings(exp_num) - 1;
         var word_from_power_thousands_arr_unbound : []u10 = undefined;
         if (word_from_power_thousands_arr) |word_from_power_thousands_arr_binding| {
-            if (word_from_power_thousands_arr_unbound.len < thousands_index + 1) {
-                word_from_power_thousands_arr = try c_allocator.realloc(word_from_power_thousands_arr_binding, thousands_index + 1);
-            }
-            if (word_from_power_thousands_arr) |arr_assign_val| {
-                word_from_power_thousands_arr_unbound = arr_assign_val;
-            }
+            word_from_power_thousands_arr_unbound = word_from_power_thousands_arr_binding;
         } else {
-            word_from_power_thousands_arr = try c_allocator.alloc(u10, thousands_index + 1);
-            if (word_from_power_thousands_arr) |arr_assign_val| {
-                word_from_power_thousands_arr_unbound = arr_assign_val;
-            }
+            return error.InvalidAllocationAccessError;
         }
         while (thousands_index >= 0) : (thousands_index -= 1) {
             const current = @as(u10, @truncate(exp_calc % 1000));
@@ -185,6 +178,16 @@ pub inline fn threeDigitStrToSmallInt(num : []const u8) !u10 {
     }
 }
 
+pub inline fn preGenerateThousandsArr(size: usize) !void {
+    if (word_from_power_thousands_arr) |word_from_power_thousands_arr_binding| {
+        if (word_from_power_thousands_arr_binding.len < size) {
+            word_from_power_thousands_arr = try c_allocator.realloc(word_from_power_thousands_arr_binding, size);
+        }
+    } else {
+        word_from_power_thousands_arr = try c_allocator.alloc(u10, size);
+    }
+}
+
 pub fn printOutNum(num : []const u8) ![]u8 {
     var result : []u8 = undefined;
     const num_len = num.len;
@@ -194,6 +197,7 @@ pub fn printOutNum(num : []const u8) ![]u8 {
     var current_slice_len : usize = undefined;
     var string_is_zero : bool = true;
     var loop_counter : usize = 0;
+    try preGenerateThousandsArr(thousandGroupings(thousands_arr_len - 1));
     while (loop_counter < thousands_arr_len) : (loop_counter += 1) {
         current_slice_len = 3;
         if (i == 0 and num_len % 3 != 0) {
