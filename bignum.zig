@@ -1,8 +1,7 @@
 const std = @import("std"); // works with version 0.15.1+
 const strutils = @import("strutils.zig");
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-const allocator = gpa.allocator();
-const arena_allocator = std.heap.ArenaAllocator.init(allocator);
+const page_allocator = std.heap.page_allocator;
+const c_allocator = std.heap.c_allocator;
 var word_from_power_thousands_arr : ?[]u10 = null;
 
 const bases = [_][]const u8 {
@@ -94,13 +93,13 @@ pub fn wordFromPower(num: usize, result: []u8) !usize {
         var word_from_power_thousands_arr_unbound : []u10 = undefined;
         if (word_from_power_thousands_arr) |word_from_power_thousands_arr_binding| {
             if (word_from_power_thousands_arr_unbound.len < thousands_index + 1) {
-                word_from_power_thousands_arr = try allocator.realloc(word_from_power_thousands_arr_binding, thousands_index + 1);
+                word_from_power_thousands_arr = try c_allocator.realloc(word_from_power_thousands_arr_binding, thousands_index + 1);
             }
             if (word_from_power_thousands_arr) |arr_assign_val| {
                 word_from_power_thousands_arr_unbound = arr_assign_val;
             }
         } else {
-            word_from_power_thousands_arr = try allocator.alloc(u10, thousands_index + 1);
+            word_from_power_thousands_arr = try c_allocator.alloc(u10, thousands_index + 1);
             if (word_from_power_thousands_arr) |arr_assign_val| {
                 word_from_power_thousands_arr_unbound = arr_assign_val;
             }
@@ -182,7 +181,7 @@ pub fn printOutNum(num : []const u8) ![]u8 {
     var result : []u8 = undefined;
     const num_len = num.len;
     const thousands_arr_len = (num_len + 2) / 3;
-    var thousands_arr = try allocator.alloc(u10, thousands_arr_len);
+    var thousands_arr = try page_allocator.alloc(u10, thousands_arr_len);
     var i : usize = 0;
     var current_slice_len : usize = undefined;
     var string_is_zero : bool = true;
@@ -199,11 +198,11 @@ pub fn printOutNum(num : []const u8) ![]u8 {
         i += current_slice_len;
     }
     if (string_is_zero == true) {
-        result = try allocator.alloc(u8, bases[0].len);
+        result = try page_allocator.alloc(u8, bases[0].len);
         @memcpy(result[0..bases[0].len], bases[0]);
         return result;
     } else {
-        result = try allocator.alloc(u8, thousands_arr_len * (max_word_size + 2));
+        result = try page_allocator.alloc(u8, thousands_arr_len * (max_word_size + 2));
     }
     var filled : usize = 0;
     var item_index : usize = 0;
@@ -218,9 +217,9 @@ pub fn printOutNum(num : []const u8) ![]u8 {
             break;
         }
     }
-    result = try allocator.realloc(result, filled);
+    result = try page_allocator.realloc(result, filled);
     defer {
-        allocator.free(thousands_arr);
+        page_allocator.free(thousands_arr);
     }
     return result;
 }
@@ -230,35 +229,34 @@ pub inline fn secondsFromNanoseconds(nanoseconds: u64) f64 {
 }
 
 pub fn main() !void {
-    const args = try std.process.argsAlloc(allocator);
+    const args = try std.process.argsAlloc(page_allocator);
     const cwd = std.fs.cwd();
+    const bufsize = 1 << 22;
+    var io_buf : [bufsize]u8 = .{0} ** bufsize;
+    var writer = std.fs.File.stdout().writer(&io_buf);
+    const stdout = &writer.interface;
     if (args.len < 2) {
         return error.ArgLengthError;
     }
-    const file = try cwd.readFileAlloc(allocator, args[1], std.math.maxInt(usize));
+    const file = try cwd.readFileAlloc(page_allocator, args[1], std.math.maxInt(usize));
     var timer = try std.time.Timer.start();
     const start = timer.read();
     const buf = try printOutNum(file);
-    // var buf = try allocator.alloc(u8, max_word_size);
-    // buf = try allocator.realloc(buf, try wordFromPower(std.math.maxInt(usize), buf));
+    defer {
+        std.process.argsFree(page_allocator, args);
+        page_allocator.free(file);
+        page_allocator.free(buf);
+        if (word_from_power_thousands_arr) |unwrap| {
+            c_allocator.free(unwrap);
+        }
+    }
     const end = timer.read();
     const num_len = file.len;
-    const num_bits = std.math.ceil(std.math.log2(10.0) * @as(f64, @floatFromInt(num_len)));
+    const num_bits = std.math.ceil(std.math.log2(@as(f64, 10.0)) * @as(f64, @floatFromInt(num_len)));
     const highest_power = num_len - 1;
     const highest_word_power = highest_power - (highest_power % 3);
     const highest_cardinal = if (highest_word_power >= 3) (highest_word_power - 3) / 3 else 0;
-    std.debug.print("Value of item is 10^{d} and a number of this length needs roughly {d} bits to represent (largest number word is 10^{d} or the cardinal sequence {d}, generated in {d} seconds)\n", .{highest_power, num_bits, highest_word_power, highest_cardinal, secondsFromNanoseconds(end - start)});
-    std.debug.print("{s}\n", .{buf});
-    defer {
-        std.process.argsFree(allocator, args);
-        allocator.free(file);
-        allocator.free(buf);
-        if (word_from_power_thousands_arr) |unwrap| {
-            allocator.free(unwrap);
-        }
-        const leaky = gpa.deinit();
-        if (leaky == std.heap.Check.leak) {
-            std.debug.print("AAAA leak\n", .{});
-        }
-    }
+    try stdout.print("Value of item is 10^{d} and a number of this length needs roughly {d} bits to represent (largest number word is 10^{d} or the cardinal sequence {d}, generated in {d} seconds)\n", .{highest_power, num_bits, highest_word_power, highest_cardinal, secondsFromNanoseconds(end - start)});
+    try stdout.flush();
+    try stdout.writeAll(buf);
 }
