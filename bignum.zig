@@ -244,7 +244,7 @@ pub fn main() !void {
     }
     const file = try cwd.readFileAlloc(page_allocator, args[1], std.math.maxInt(usize));
     var timer = try std.time.Timer.start();
-    const start = timer.read();
+    var start = timer.read();
     const buf = try printOutNum(file);
     defer {
         std.process.argsFree(page_allocator, args);
@@ -254,7 +254,7 @@ pub fn main() !void {
             c_allocator.free(unwrap);
         }
     }
-    const end = timer.read();
+    var end = timer.read();
     const num_len = file.len;
     const num_bits = std.math.ceil(std.math.log2(@as(f64, 10.0)) * @as(f64, @floatFromInt(num_len)));
     const highest_power = num_len - 1;
@@ -262,6 +262,10 @@ pub fn main() !void {
     const highest_cardinal = if (highest_word_power >= 3) (highest_word_power - 3) / 3 else 0;
     try stdout.print("Value of item is 10^{d} and a number of this length needs roughly {d} bits to represent (largest number word is 10^{d} or the cardinal sequence {d}, generated in {d} seconds)\n", .{highest_power, num_bits, highest_word_power, highest_cardinal, secondsFromNanoseconds(end - start)});
     try stdout.flush();
+    start = timer.read();
     try stdout.writeAll(buf);
+    try stdout.flush();
+    end = timer.read();
+    try stdout.print("\nPrinting the number took {d} seconds\n", .{secondsFromNanoseconds(end - start)});
     try stdout.flush();
 }
