@@ -15,5 +15,6 @@ pub fn build(b: *std.Build) void {
             .code_model = .large,
         }),
     });
+    exe.linkLibC();
     b.installArtifact(exe);
 }

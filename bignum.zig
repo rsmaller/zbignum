@@ -3,29 +3,21 @@ const strutils = @import("strutils.zig");
 const page_allocator = std.heap.page_allocator;
 const c_allocator = std.heap.c_allocator;
 var word_from_power_thousands_arr : ?[]u10 = null;
-const io_bufsize = 1 << 21;
-var io_buf : [io_bufsize]u8 = .{0} ** io_bufsize;
-var writer = std.fs.File.stdout().writer(&io_buf);
-const stdout = &writer.interface;
+var stdout : *std.Io.Writer = undefined;
+
+const max_word_size : usize = 255;
 
 const bases = [_][]const u8 {
     "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
-    "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
-    "seventeen", "eighteen", "nineteen", "twenty", "twenty-one", "twenty-two", "twenty-three",
-    "twenty-four", "twenty-five", "twenty-six", "twenty-seven", "twenty-eight", "twenty-nine",
-    "thirty", "thirty-one", "thirty-two", "thirty-three", "thirty-four", "thirty-five",
-    "thirty-six", "thirty-seven", "thirty-eight", "thirty-nine", "forty", "forty-one",
-    "forty-two", "forty-three", "forty-four", "forty-five", "forty-six", "forty-seven",
-    "forty-eight", "forty-nine", "fifty", "fifty-one", "fifty-two", "fifty-three",
-    "fifty-four", "fifty-five", "fifty-six", "fifty-seven", "fifty-eight", "fifty-nine",
-    "sixty", "sixty-one", "sixty-two", "sixty-three", "sixty-four", "sixty-five",
-    "sixty-six", "sixty-seven", "sixty-eight", "sixty-nine", "seventy", "seventy-one",
-    "seventy-two", "seventy-three", "seventy-four", "seventy-five", "seventy-six",
-    "seventy-seven", "seventy-eight", "seventy-nine", "eighty", "eighty-one",
-    "eighty-two", "eighty-three", "eighty-four", "eighty-five", "eighty-six",
-    "eighty-seven", "eighty-eight", "eighty-nine", "ninety", "ninety-one",
-    "ninety-two", "ninety-three", "ninety-four", "ninety-five", "ninety-six",
-    "ninety-seven", "ninety-eight", "ninety-nine"
+    "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
+    "twenty", "twenty-one", "twenty-two", "twenty-three", "twenty-four", "twenty-five", "twenty-six", "twenty-seven", "twenty-eight", "twenty-nine",
+    "thirty", "thirty-one", "thirty-two", "thirty-three", "thirty-four", "thirty-five", "thirty-six", "thirty-seven", "thirty-eight", "thirty-nine",
+    "forty", "forty-one", "forty-two", "forty-three", "forty-four", "forty-five", "forty-six", "forty-seven", "forty-eight", "forty-nine",
+    "fifty", "fifty-one", "fifty-two", "fifty-three", "fifty-four", "fifty-five", "fifty-six", "fifty-seven", "fifty-eight", "fifty-nine",
+    "sixty", "sixty-one", "sixty-two", "sixty-three", "sixty-four", "sixty-five", "sixty-six", "sixty-seven", "sixty-eight", "sixty-nine",
+    "seventy", "seventy-one", "seventy-two", "seventy-three", "seventy-four", "seventy-five", "seventy-six", "seventy-seven", "seventy-eight", "seventy-nine",
+    "eighty", "eighty-one", "eighty-two", "eighty-three", "eighty-four", "eighty-five", "eighty-six", "eighty-seven", "eighty-eight", "eighty-nine",
+    "ninety", "ninety-one", "ninety-two", "ninety-three", "ninety-four", "ninety-five", "ninety-six", "ninety-seven", "ninety-eight", "ninety-nine"
 };
 
 const single_digit_powers = [_][]const u8 {"thousand", "million", "billion", "trillion", "quadrillion", "quintillion", "sextillion",
@@ -56,8 +48,6 @@ const BigNumError = error {
     MemoryLeakError,
     InvalidAllocationAccessError,
 };
-
-const max_word_size : usize = 255;
 
 pub fn injectUnderThousandNum(buffer: []u8, filled: usize, num: u10) !usize {
     var current_filled : usize = filled;
@@ -124,7 +114,7 @@ pub fn wordFromPower(num: usize, result: []u8) !usize {
                 }
             }
         }
-        if (filled >= 5 and std.mem.startsWith(u8, result[filled-5..], "milli"[0..])) {
+        if (filled >= 5 and std.mem.startsWith(u8, result[filled-5..], "milli")) {
             filled += strutils.strConcatLowOverhead(result, filled, "n");
         }
         filled += strutils.strConcatLowOverhead(result, filled, "illion");
@@ -135,7 +125,7 @@ pub fn wordFromPower(num: usize, result: []u8) !usize {
         filled += strutils.strConcatLowOverhead(result, filled, quintuple_triple_digit_modifiers[exp_num / 100 % quintuple_triple_digit_modifiers.len]);
         filled += strutils.strConcatLowOverhead(result, filled, quintuple_double_digit_modifiers[exp_num / 10 % quintuple_double_digit_modifiers.len]);
         filled += strutils.strConcatLowOverhead(result, filled, quintuple_single_digit_modifiers[exp_num % 10]);
-        if (filled >= 5 and std.mem.startsWith(u8, result[filled-5..], "milli"[0..])) {
+        if (filled >= 5 and std.mem.startsWith(u8, result[filled-5..], "milli")) {
             filled += strutils.strConcatLowOverhead(result, filled, "n");
         }
         filled += strutils.strConcatLowOverhead(result, filled, "illion");
@@ -144,7 +134,7 @@ pub fn wordFromPower(num: usize, result: []u8) !usize {
         filled += strutils.strConcatLowOverhead(result, filled, quadruple_triple_digit_modifiers[exp_num / 100 % quadruple_triple_digit_modifiers.len]);
         filled += strutils.strConcatLowOverhead(result, filled, quadruple_double_digit_modifiers[exp_num / 10 % quadruple_double_digit_modifiers.len]);
         filled += strutils.strConcatLowOverhead(result, filled, quadruple_single_digit_modifiers[exp_num % 10]);
-        if (filled >= 5 and std.mem.startsWith(u8, result[filled-5..], "milli"[0..])) {
+        if (filled >= 5 and std.mem.startsWith(u8, result[filled-5..], "milli")) {
             filled += strutils.strConcatLowOverhead(result, filled, "n");
         }
         filled += strutils.strConcatLowOverhead(result, filled, "illion");
@@ -163,15 +153,9 @@ pub fn wordFromPower(num: usize, result: []u8) !usize {
 
 pub inline fn threeDigitStrToSmallInt(num : []const u8) !u10 {
     switch(num.len) {
-        0 => {
-            return error.SizeError;
-        },
-        1 => {
-            return (num[0] - '0');
-        },
-        2 => {
-            return (num[0] - '0') * 10 + (num[1] - '0');
-        },
+        0 => { return error.SizeError; },
+        1 => { return (num[0] - '0'); },
+        2 => { return (num[0] - '0') * 10 + (num[1] - '0'); },
         else => {
             return (@as(u10, num[0]) - '0') * 100 + (@as(u10, num[1]) - '0') * 10 + (@as(u10, num[2]) - '0');
         }
@@ -241,8 +225,18 @@ pub inline fn secondsFromNanoseconds(nanoseconds: u64) f64 {
 }
 
 pub fn main() !void {
+    const io_bufsize = 1 << 21;
+    var io_buf : [io_bufsize]u8 = .{0} ** io_bufsize;
+    var writer = std.fs.File.stdout().writer(&io_buf);
+    stdout = &writer.interface;
     const args = try std.process.argsAlloc(page_allocator);
     const cwd = std.fs.cwd();
+    defer {
+        std.process.argsFree(page_allocator, args);
+        if (word_from_power_thousands_arr) |unwrap| {
+            c_allocator.free(unwrap);
+        }
+    }
     if (args.len < 2) {
         return error.ArgLengthError;
     }
@@ -250,15 +244,12 @@ pub fn main() !void {
     var timer = try std.time.Timer.start();
     var start = timer.read();
     const buf = try printOutNum(file);
+    var end = timer.read();
     defer {
-        std.process.argsFree(page_allocator, args);
         page_allocator.free(file);
         page_allocator.free(buf);
-        if (word_from_power_thousands_arr) |unwrap| {
-            c_allocator.free(unwrap);
-        }
+
     }
-    var end = timer.read();
     const num_len = file.len;
     const num_bits = std.math.ceil(std.math.log2(@as(f64, 10.0)) * @as(f64, @floatFromInt(num_len)));
     const highest_power = num_len - 1;
