@@ -193,6 +193,7 @@ pub fn printOutNum(num : []const u8) ![]u8 {
     const num_len = num.len;
     const thousands_arr_len = (num_len + 2) / 3;
     var thousands_arr = try page_allocator.alloc(u10, thousands_arr_len);
+    defer page_allocator.free(thousands_arr);
     var i : usize = 0;
     var current_slice_len : usize = undefined;
     var string_is_zero : bool = true;
@@ -221,7 +222,7 @@ pub fn printOutNum(num : []const u8) ![]u8 {
     while (item_index < thousands_arr_len) : (item_index += 1) {
         const item = thousands_arr[item_index];
         if (item == 0) continue;
-        filled += try injectUnderThousandNum(result[0..], filled, item);
+        filled += try injectUnderThousandNum(result, filled, item);
         filled += try wordFromPower(@as(u64, @truncate((thousands_arr_len - item_index - 1) * 3)), result[filled..filled+max_word_size]);
         if (item_index != thousands_arr_len - 1) {
             filled += strutils.strConcatLowOverhead(result, filled, ", ");
@@ -229,11 +230,7 @@ pub fn printOutNum(num : []const u8) ![]u8 {
             break;
         }
     }
-    result = try page_allocator.realloc(result, filled);
-    defer {
-        page_allocator.free(thousands_arr);
-    }
-    return result;
+    return result[0..filled];
 }
 
 pub inline fn secondsFromNanoseconds(nanoseconds: u64) f64 {
@@ -242,22 +239,20 @@ pub inline fn secondsFromNanoseconds(nanoseconds: u64) f64 {
 
 pub fn main() !void {
     const args = try std.process.argsAlloc(page_allocator);
+    defer std.process.argsFree(page_allocator, args);
     const cwd = std.fs.cwd();
     if (args.len < 2) {
         return error.ArgLengthError;
     }
     const file = try cwd.readFileAlloc(page_allocator, args[1], std.math.maxInt(usize));
+    defer page_allocator.free(file);
     var timer = try std.time.Timer.start();
     var start = timer.read();
     const buf = try printOutNum(file);
-    defer {
-        std.process.argsFree(page_allocator, args);
-        page_allocator.free(file);
-        page_allocator.free(buf);
-        if (word_from_power_thousands_arr) |unwrap| {
+    defer page_allocator.free(buf);
+    defer if (word_from_power_thousands_arr) |unwrap| {
             c_allocator.free(unwrap);
-        }
-    }
+    };
     var end = timer.read();
     const num_len = file.len;
     const num_bits = std.math.ceil(std.math.log2(@as(f64, 10.0)) * @as(f64, @floatFromInt(num_len)));
