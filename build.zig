@@ -6,7 +6,7 @@ pub fn build(b: *std.Build) void {
             .cpu_model = .native,
         },
     });
-    const exe = b.addExecutable(.{
+    const bignumexe = b.addExecutable(.{
         .name = "bignum",
         .root_module = b.createModule(.{
             .root_source_file = b.path("bignum.zig"),
@@ -15,6 +15,17 @@ pub fn build(b: *std.Build) void {
             .code_model = .large,
         }),
     });
-    exe.linkLibC();
-    b.installArtifact(exe);
+    const filegenexe = b.addExecutable(.{
+        .name = "filegen",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("filegen.zig"),
+            .target = target,
+            .optimize = .ReleaseFast,
+            .code_model = .large,
+        }),
+    });
+    filegenexe.linkLibC();
+    b.installArtifact(filegenexe);
+    bignumexe.linkLibC();
+    b.installArtifact(bignumexe);
 }

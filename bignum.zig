@@ -3,10 +3,7 @@ const strutils = @import("strutils.zig");
 const page_allocator = std.heap.page_allocator;
 const c_allocator = std.heap.c_allocator;
 var word_from_power_thousands_arr : ?[]u10 = null;
-const io_bufsize = 1 << 21;
-var io_buf : [io_bufsize]u8 = .{0} ** io_bufsize;
-var writer = std.fs.File.stdout().writer(&io_buf);
-const stdout = &writer.interface;
+var stdout : *std.Io.Writer = undefined;
 
 const bases = [_][]const u8 {
     "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
@@ -225,6 +222,10 @@ pub inline fn secondsFromNanoseconds(nanoseconds: u64) f64 {
 }
 
 pub fn main() !void {
+    const io_bufsize = 1 << 21;
+    var io_buf : [io_bufsize]u8 = .{0} ** io_bufsize;
+    var writer = std.fs.File.stdout().writer(&io_buf);
+    stdout = &writer.interface;
     const args = try std.process.argsAlloc(page_allocator);
     defer std.process.argsFree(page_allocator, args);
     const cwd = std.fs.cwd();

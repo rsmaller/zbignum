@@ -1,9 +1,6 @@
 const std = @import("std");
-const io_bufsize = 256;
-var io_buf : [io_bufsize]u8 = .{0} ** io_bufsize;
-var stdout_writer = std.fs.File.stdout().writer(&io_buf);
-const stdout = &stdout_writer.interface;
 const c_allocator = std.heap.c_allocator;
+var stdout : *std.Io.Writer = undefined;
 
 const FileGenError = error {
     ArgLengthError,
@@ -16,6 +13,10 @@ pub inline fn secondsFromNanoseconds(nanoseconds: u64) f64 {
 }
 
 pub fn main() !void {
+    const io_bufsize = 1 << 21;
+    var io_buf : [io_bufsize]u8 = .{0} ** io_bufsize;
+    var writer = std.fs.File.stdout().writer(&io_buf);
+    stdout = &writer.interface;
     const args = try std.process.argsAlloc(c_allocator);
     defer c_allocator.free(args);
     const rand = std.crypto.random;
