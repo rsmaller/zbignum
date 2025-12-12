@@ -24,6 +24,17 @@ pub fn build(b: *std.Build) void {
             .code_model = .large,
         }),
     });
+    const wordfrompowerexe = b.addExecutable(.{
+        .name = "wordfrompower",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("wordfrompower.zig"),
+            .target = target,
+            .optimize = .ReleaseFast,
+            .code_model = .large,
+        }),
+    });
+    wordfrompowerexe.linkLibC();
+    b.installArtifact(wordfrompowerexe);
     filegenexe.linkLibC();
     b.installArtifact(filegenexe);
     bignumexe.linkLibC();

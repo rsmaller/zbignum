@@ -2,7 +2,7 @@ const std = @import("std"); // works with version 0.15.1+
 const strutils = @import("strutils.zig");
 const page_allocator = std.heap.page_allocator;
 const c_allocator = std.heap.c_allocator;
-var word_from_power_thousands_arr : ?[]u10 = null;
+pub var word_from_power_thousands_arr : ?[]u10 = null;
 var stdout : *std.Io.Writer = undefined;
 
 const bases = [_][]const u8 {
@@ -39,7 +39,7 @@ const quintuple_triple_digit_modifiers = [_][]const u8 {"", "centi", "ducenti", 
 const quintuple_double_digit_modifiers = [_][]const u8 {"", "deci", "viginti", "triginta", "quadraginta", "quinquaginta", "sexaginta", "septuaginta", "octoginta", "nonaginta"};
 const quintuple_single_digit_modifiers = [_][]const u8 {"", "un", "duo", "tres", "quattuor", "quin", "sex", "septen", "octo", "novem"};
 
-const BigNumError = error {
+pub const BigNumError = error {
     SizeError,
     BufferFullError,
     ArgLengthError,
@@ -47,7 +47,7 @@ const BigNumError = error {
     InvalidAllocationAccessError,
 };
 
-const max_word_size : usize = 255;
+pub const max_word_size : usize = 255;
 
 pub fn injectUnderThousandNum(buffer: []u8, filled: usize, num: u10) !usize {
     var current_filled : usize = filled;
