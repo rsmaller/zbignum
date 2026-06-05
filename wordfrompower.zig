@@ -20,6 +20,13 @@ pub fn main() !void {
     }
     var buf : [bignum.max_word_size]u8 = undefined;
     const filled = try bignum.wordFromPower(exponent, &buf);
-    try stdout.print("{s}\n", .{buf[0..filled]});
+    try stdout.print("{s} (Cardinal ", .{buf[0..filled]});
+    const cardinal = if (exponent >= 3) exponent / 3 - 1 else 1;
+    if (exponent < 3) {
+        try stdout.print("-1)\n", .{});
+    } else {
+        try stdout.print("{d})\n", .{cardinal});
+    }
+
     try stdout.flush();
 }

@@ -214,6 +214,9 @@ pub fn printOutNum(num : []const u8) ![]u8 {
             break;
         }
     }
+    if (std.mem.eql(u8, result[filled-2..filled], ", ")) { // Handle leading comma and space edge case.
+        filled -= 2;
+    }
     return result[0..filled];
 }
 
